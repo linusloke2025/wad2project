@@ -136,7 +136,7 @@ cd server
 npm run test:unit
 ```
 
-366 tests. They cover:
+392 tests in total — one skips unless OneMap credentials are present in `server/.env`. They cover:
 
 - **Domain logic**: the four conflict rules, polygon geometry, RBAC, password hashing, JWT
   handling, CSV parsing, announcement tallies, and the bottleneck report maths.
