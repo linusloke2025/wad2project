@@ -26,8 +26,12 @@ export function createTokenService({ secret, expiresIn = DEFAULT_EXPIRY } = {}) 
   }
 
   return {
-    sign({ userId, role, communityId }) {
-      return jwt.sign({ sub: userId, role, communityId }, secret, { expiresIn })
+    sign({ userId, role, communityId, mustChangePassword = false }) {
+      return jwt.sign(
+        { sub: userId, role, communityId, mustChangePassword: mustChangePassword === true },
+        secret,
+        { expiresIn },
+      )
     },
 
     /**
@@ -41,6 +45,9 @@ export function createTokenService({ secret, expiresIn = DEFAULT_EXPIRY } = {}) 
         userId: decoded.sub,
         role: decoded.role,
         communityId: decoded.communityId,
+        // Carried in the token so the server can refuse every other route on a temporary
+        // password without a database round-trip per request.
+        mustChangePassword: decoded.mustChangePassword === true,
       }
     },
   }

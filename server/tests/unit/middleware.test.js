@@ -105,7 +105,14 @@ describe('requireAuth', () => {
 
     expect(next).toHaveBeenCalledOnce()
     expect(res.statusCode).toBeNull()
-    expect(req.auth).toEqual({ userId: 'u1', role: 'planner', communityId: 'c1' })
+    // Exact equality kept deliberately: this asserts the whole contract of req.auth, so a new
+    // claim arriving unnoticed fails here rather than surfacing as a subtly different session.
+    expect(req.auth).toEqual({
+      userId: 'u1',
+      role: 'planner',
+      communityId: 'c1',
+      mustChangePassword: false,
+    })
   })
 })
 

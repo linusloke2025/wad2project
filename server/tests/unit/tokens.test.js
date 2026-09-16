@@ -61,3 +61,23 @@ describe('sign / verify', () => {
     expect(() => service.verify('not.a.jwt')).toThrowError(/jwt|malformed|invalid/i)
   })
 })
+
+describe('forced password change', () => {
+  // Accounts are admin-provisioned with a temporary password and must change it on first
+  // login (docs/SPEC.md section 5.1). The flag rides in the token so the server can refuse
+  // every other route without a database round-trip on each request.
+
+  it('carries the mustChangePassword flag through sign and verify', () => {
+    const service = tokens.createTokenService({ secret: SECRET })
+
+    const verified = service.verify(service.sign({ ...CLAIMS, mustChangePassword: true }))
+
+    expect(verified.mustChangePassword).toBe(true)
+  })
+
+  it('defaults the flag to false when not supplied', () => {
+    const service = tokens.createTokenService({ secret: SECRET })
+
+    expect(service.verify(service.sign(CLAIMS)).mustChangePassword).toBe(false)
+  })
+})
