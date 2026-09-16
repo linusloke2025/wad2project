@@ -1,0 +1,19 @@
+{
+  "name": "wad2-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "IS216 event-coordination app — Express + MongoDB backend",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "seed": "node src/scripts/seed.js",
+    "test:unit": "vitest run --pool=threads"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
+  }
+}

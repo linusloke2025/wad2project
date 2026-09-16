@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Workspace-local npm cache (created because the sandbox cannot write the global npm cache)
+.npm-cache/
+
+# Scratch / extraction workspace
+.scratch/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build + test output
+dist/
+coverage/
+playwright-report/
+test-results/
+.vite/
+
+# School materials — not ours to publish in a public repo
+Brief.pdf
+docs/brief-decoded.txt
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.log
