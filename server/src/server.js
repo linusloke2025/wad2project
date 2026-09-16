@@ -15,6 +15,7 @@ import mongoose from 'mongoose'
 import { createApp } from './app.js'
 import { createTokenService } from './auth/tokens.js'
 import { loadConfig } from './config.js'
+import { createBroadcaster } from './realtime/broadcaster.js'
 import { createLiveState } from './realtime/liveState.js'
 import { createRealtimeServer } from './realtime/socketServer.js'
 import { createMongooseRepositories } from './repositories/mongooseRepositories.js'
@@ -42,6 +43,9 @@ export async function startServer({ env = process.env } = {}) {
   // One store shared by the Socket.IO layer and the HTTP live-snapshot route, so a reconnecting
   // client resyncs against the same view it was receiving.
   const liveState = createLiveState()
+  // One publisher shared by the HTTP routes and the socket layer, so an announcement authored
+  // over HTTP reaches the event's socket room.
+  const broadcaster = createBroadcaster()
 
   const app = createApp({
     tokenService,
@@ -49,10 +53,11 @@ export async function startServer({ env = process.env } = {}) {
     conflictService: createConflictService({ onemapClient }),
     staticMapService: createStaticMapService(),
     liveState,
+    broadcaster,
   })
 
   const httpServer = http.createServer(app)
-  createRealtimeServer({ httpServer, tokenService, repositories, liveState })
+  createRealtimeServer({ httpServer, tokenService, repositories, liveState, broadcaster })
 
   return httpServer.listen(config.port, () => {
     console.log(`Listening on http://localhost:${config.port}`)

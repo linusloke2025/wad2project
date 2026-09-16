@@ -29,7 +29,7 @@ function isValidPolygon(polygon) {
   )
 }
 
-export function createEventsRouter({ repositories, conflictService, staticMapService, liveState }) {
+export function createEventsRouter({ repositories, conflictService, staticMapService, liveState, broadcaster }) {
   const router = Router()
 
   async function loadEvent(req, res) {
@@ -224,6 +224,10 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
         body: body.trim(),
         createdBy: req.auth.userId,
       })
+
+      // Publish rather than emit: the socket layer subscribes if this process has one, and a
+      // process without realtime can still author announcements.
+      broadcaster?.publish('announcement:created', event.id, announcement)
 
       return res.status(201).json(announcement)
     } catch (error) {

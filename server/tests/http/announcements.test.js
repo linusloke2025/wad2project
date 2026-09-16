@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { io as ioClient } from 'socket.io-client'
 
 import { createApp } from '../../src/app.js'
 import { createTokenService } from '../../src/auth/tokens.js'
 import { hashPassword } from '../../src/auth/passwords.js'
 import { createConflictService } from '../../src/services/conflictService.js'
 import { createLiveState } from '../../src/realtime/liveState.js'
+import { createBroadcaster } from '../../src/realtime/broadcaster.js'
+import { createRealtimeServer } from '../../src/realtime/socketServer.js'
 
 // Announcements and their acknowledgement tallies, over real HTTP.
 //
@@ -140,14 +143,23 @@ beforeAll(async () => {
     user.passwordHash = await hashPassword(plain)
   }
 
+  const broadcaster = createBroadcaster()
   const app = createApp({
     tokenService: createTokenService({ secret: SECRET }),
     repositories,
     conflictService: createConflictService({ onemapClient: null }),
     liveState: createLiveState(),
+    broadcaster,
   })
   const { createServer } = await import('node:http')
   httpServer = createServer(app)
+  createRealtimeServer({
+    httpServer,
+    tokenService: createTokenService({ secret: SECRET }),
+    repositories,
+    liveState: createLiveState(),
+    broadcaster,
+  })
   await new Promise((resolve) => httpServer.listen(0, resolve))
   baseUrl = `http://127.0.0.1:${httpServer.address().port}`
 })
@@ -371,5 +383,62 @@ describe('POST /api/events/:id/announcements/:announcementId/ack', () => {
     })
 
     expect([403, 404]).toContain(status)
+  })
+})
+
+describe('announcement delivery over the socket', () => {
+  function connect(token) {
+    return new Promise((resolve, reject) => {
+      const socket = ioClient(baseUrl, { auth: { token }, reconnection: false })
+      const timer = setTimeout(() => reject(new Error('connect timeout')), 5000)
+      socket.once('connect', () => {
+        clearTimeout(timer)
+        resolve(socket)
+      })
+      socket.once('connect_error', (error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+    })
+  }
+
+  function emit(socket, event, payload) {
+    return new Promise((resolve) => socket.emit(event, payload, resolve))
+  }
+
+  it('pushes a new announcement to clients already in the event room', async () => {
+    // Without this, a lead only learns of a change when their board happens to refetch.
+    const leadSocket = await connect(await sessionFor('lead@example.com', 'leadpass'))
+    await emit(leadSocket, 'event:join', { eventId: oid(20) })
+
+    const delivered = new Promise((resolve) => leadSocket.once('announcement:created', resolve))
+
+    const plannerToken = await sessionFor('planner@example.com', 'plannerpass')
+    await request(`/api/events/${oid(20)}/announcements`, {
+      method: 'POST',
+      body: { body: 'Group 3 delayed 10 minutes' },
+      token: plannerToken,
+    })
+
+    await expect(delivered).resolves.toMatchObject({ body: 'Group 3 delayed 10 minutes' })
+    leadSocket.disconnect()
+  })
+
+  it('does not push an announcement to a client that never joined the event', async () => {
+    const outsiderSocket = await connect(await sessionFor('member@example.com', 'memberpass'))
+
+    let leaked = false
+    outsiderSocket.on('announcement:created', () => {
+      leaked = true
+    })
+
+    const plannerToken = await sessionFor('planner@example.com', 'plannerpass')
+    await request(`/api/events/${oid(20)}/announcements`, {
+      method: 'POST', body: { body: 'Internal note' }, token: plannerToken,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    expect(leaked).toBe(false)
+    outsiderSocket.disconnect()
   })
 })

@@ -15,9 +15,10 @@ import { createAuthRouter } from './http/routes/auth.js'
 import { createEventsRouter } from './http/routes/events.js'
 import { createConflictService } from './services/conflictService.js'
 import { createStaticMapService } from './services/staticMapService.js'
+import { createBroadcaster } from './realtime/broadcaster.js'
 import { createLiveState } from './realtime/liveState.js'
 
-export function createApp({ tokenService, repositories, conflictService, staticMapService, liveState } = {}) {
+export function createApp({ tokenService, repositories, conflictService, staticMapService, liveState, broadcaster } = {}) {
   if (!tokenService) throw new Error('createApp requires a tokenService')
   if (!repositories) throw new Error('createApp requires repositories')
 
@@ -32,6 +33,8 @@ export function createApp({ tokenService, repositories, conflictService, staticM
   const staticMaps = staticMapService ?? createStaticMapService()
   // Shared with the Socket.IO layer so the live board and the HTTP resync read one store.
   const live = liveState ?? createLiveState()
+  // A default publisher keeps the app usable with no realtime layer attached.
+  const announcementsBroadcaster = broadcaster ?? createBroadcaster()
 
   // Unauthenticated by design: logging in is how you get a token.
   app.use('/api/auth', createAuthRouter({ tokenService, repositories }))
@@ -50,7 +53,13 @@ export function createApp({ tokenService, repositories, conflictService, staticM
     '/api/events',
     auth,
     requirePasswordChanged,
-    createEventsRouter({ repositories, conflictService: conflicts, staticMapService: staticMaps, liveState: live }),
+    createEventsRouter({
+      repositories,
+      conflictService: conflicts,
+      staticMapService: staticMaps,
+      liveState: live,
+      broadcaster: announcementsBroadcaster,
+    }),
   )
 
   app.use((req, res) => {

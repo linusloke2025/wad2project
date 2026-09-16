@@ -20,7 +20,7 @@ import { can } from '../domain/permissions.js'
 
 export const EVENT_ROOM_PREFIX = 'event:'
 
-export function createRealtimeServer({ httpServer, tokenService, repositories, liveState } = {}) {
+export function createRealtimeServer({ httpServer, tokenService, repositories, liveState, broadcaster } = {}) {
   if (!httpServer) throw new Error('createRealtimeServer requires an httpServer')
   if (!tokenService) throw new Error('createRealtimeServer requires a tokenService')
   if (!repositories) throw new Error('createRealtimeServer requires repositories')
@@ -29,6 +29,14 @@ export function createRealtimeServer({ httpServer, tokenService, repositories, l
   const io = new Server(httpServer, {
     cors: { origin: true, credentials: true },
   })
+
+  // Announcements are authored over HTTP but delivered over the socket, so the HTTP route
+  // publishes and this layer fans it out to the event's room.
+  if (broadcaster) {
+    broadcaster.subscribe((event, eventId, payload) => {
+      io.to(EVENT_ROOM_PREFIX + eventId).emit(event, payload)
+    })
+  }
 
   // Handshake: a socket is anonymous until its token verifies.
   io.use((socket, next) => {
