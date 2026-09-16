@@ -52,4 +52,19 @@ test.describe('Journey 2 — role-based access', () => {
     // lead on the ground needs their own status and has to receive announcements.
     await expect(page.getByTestId('live-connection')).toBeVisible()
   })
+
+  test('an administrator is offered bulk member import', async ({ page }) => {
+    // Provisioning accounts is how a roster arrives, since there is no public sign-up.
+    await signIn(page, E2E_USERS.admin)
+
+    await expect(page.getByTestId('csv-input')).toBeVisible()
+  })
+
+  test('a planner is not offered bulk member import', async ({ page }) => {
+    // A planner coordinates an event; deciding who exists in the community is an admin act.
+    // The API refuses it too — this checks the UI does not offer a button that would 403.
+    await signIn(page, E2E_USERS.planner)
+
+    await expect(page.getByTestId('csv-input')).toHaveCount(0)
+  })
 })

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { describeError } from '@/api/client.js'
 import { useAuthStore } from '@/stores/auth.js'
+import MemberImport from '@/components/MemberImport.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -93,6 +94,9 @@ onMounted(load)
     </div>
 
     <div v-if="error" class="alert alert-danger" role="alert">{{ error }}</div>
+
+    <!-- Community-level onboarding, so it sits above the events rather than inside one. -->
+    <MemberImport />
 
     <form v-if="showCreate" class="card mb-4" @submit.prevent="createEvent">
       <div class="card-body">

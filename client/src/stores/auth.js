@@ -40,6 +40,9 @@ export const useAuthStore = defineStore('auth', {
     canManageGroups: (state) => ['root', 'admin', 'planner'].includes(state.role),
     canManageLayout: (state) => ['root', 'admin', 'layout_designer'].includes(state.role),
     canBroadcast: (state) => ['root', 'admin', 'planner'].includes(state.role),
+    // Provisioning accounts is an administrative act: a planner coordinates an event but does
+    // not decide who exists.
+    canMassAdd: (state) => ['root', 'admin'].includes(state.role),
   },
 
   actions: {

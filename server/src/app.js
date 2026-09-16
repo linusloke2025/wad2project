@@ -15,6 +15,7 @@ import { requireAuth } from './http/middleware/requireAuth.js'
 import { requirePasswordChanged } from './http/middleware/requirePasswordChanged.js'
 import { createAuthRouter } from './http/routes/auth.js'
 import { createEventsRouter } from './http/routes/events.js'
+import { createMembersRouter } from './http/routes/members.js'
 import { createConflictService } from './services/conflictService.js'
 import { createStaticMapService } from './services/staticMapService.js'
 import { createBroadcaster } from './realtime/broadcaster.js'
@@ -59,6 +60,8 @@ export function createApp({
   })
 
   // Everything below requires a session that is not stuck on a temporary password.
+  app.use('/api/members', auth, requirePasswordChanged, createMembersRouter({ repositories }))
+
   app.use(
     '/api/events',
     auth,
