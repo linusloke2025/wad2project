@@ -41,6 +41,17 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
     return event
   }
 
+  // The landing list. Only community scoping applies: every member of the community needs to
+  // find their own event, including ordinary group members.
+  router.get('/', async (req, res, next) => {
+    try {
+      const events = await repositories.events.listByCommunity(req.auth.communityId)
+      return res.json({ events })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
   router.post('/', requireCapability('event.create'), async (req, res, next) => {
     try {
       const { name, start, end, layoutMode, metresPerPixel, latitude, longitude, zoom } = req.body ?? {}
@@ -324,6 +335,18 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
       const evaluation = await conflictService.evaluate({ event, zones, groups, assignments })
 
       return res.json(evaluation)
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  // Single event. Placed last so the more specific sub-resources above are matched first; the
+  // path shapes differ by segment count anyway, so ordering is belt-and-braces.
+  router.get('/:eventId', async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+      return res.json(event)
     } catch (error) {
       return next(error)
     }

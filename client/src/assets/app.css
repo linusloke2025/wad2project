@@ -1,0 +1,58 @@
+/*
+ * Small additions on top of Bootstrap.
+ *
+ * Deliberately minimal: Bootstrap already handles the responsive grid, and re-styling it would
+ * work against the brief's "clean, logical flows" criterion.
+ */
+
+:root {
+  /* Keeps the sticky action bars clear of the home indicator on notched phones. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body {
+  /* Prevents iOS Safari zooming when a small-font input gains focus, which otherwise makes
+     forms unusable at 375px. */
+  font-size: 16px;
+}
+
+/* Touch targets at mobile sizes: 44px is the conventional minimum comfortable tap area. */
+@media (max-width: 767.98px) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .form-control,
+  .form-select {
+    min-height: 44px;
+  }
+}
+
+/* A sticky bottom bar for mobile actions, sitting above the safe area. */
+.action-bar-mobile {
+  padding-bottom: var(--safe-bottom);
+}
+
+/* Bootstrap's default container padding is tight on small screens. */
+@media (max-width: 575.98px) {
+  .container-fluid {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* Zones and blocked areas rendered over a layout image. */
+.layout-surface {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  background-color: var(--bs-light);
+}
+
+.layout-surface img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
