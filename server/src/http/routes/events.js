@@ -322,6 +322,32 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
     },
   )
 
+  // Group composition and timings are planning data, so these are gated like the conflict list
+  // rather than being open to everyone in the community.
+  router.get('/:eventId/groups', requireCapability('conflict.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const groups = await repositories.groups.listByEvent(event.id)
+      return res.json({ groups })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.get('/:eventId/assignments', requireCapability('conflict.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const assignments = await repositories.assignments.listByEvent(event.id)
+      return res.json({ assignments })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
   router.get('/:eventId/conflicts', requireCapability('conflict.view'), async (req, res, next) => {    try {
       const event = await loadEvent(req, res)
       if (!event) return undefined

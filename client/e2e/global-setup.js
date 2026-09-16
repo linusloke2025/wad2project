@@ -12,7 +12,12 @@ export default async function globalSetup() {
   }
 
   // Imported here rather than at module load so mongoose is only pulled in when seeding runs.
-  const { seedE2E } = await import('../../server/src/scripts/seedE2E.js')
+  const { resetE2E, seedE2E } = await import('../../server/src/scripts/seedE2E.js')
+
+  // Reset first: the journeys mutate the fixture event, so without this each run starts from
+  // whatever the previous one left behind and a negative assertion eventually fails on
+  // leftover data rather than on a defect.
+  await resetE2E({ uri })
   const seeded = await seedE2E({ uri })
 
   console.log(`[e2e] seeded event ${seeded.eventId} in the e2e database`)

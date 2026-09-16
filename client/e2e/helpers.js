@@ -30,3 +30,27 @@ export async function openSeededEvent(page, eventName) {
   await page.getByRole('link', { name: 'Open plan' }).first().click()
   await expect(page.getByTestId('event-name')).toHaveText(eventName)
 }
+
+/**
+ * Assert a group appears in the group list.
+ *
+ * Scoped to the list rather than a bare getByText: a group's name legitimately appears twice —
+ * once in the list and once as an option in the scheduling dropdown — so an unscoped text match
+ * resolves to two elements and Playwright's strict mode fails. The duplicate is correct
+ * behaviour, so the locator has to be the thing that changes.
+ */
+export async function expectGroupListed(page, name) {
+  await expect(page.getByTestId('group-name').filter({ hasText: name })).toBeVisible()
+}
+
+/** Create a group through the schedule panel and wait for it to be listed. */
+export async function addGroup(page, name) {
+  await page.getByTestId('group-name-input').fill(name)
+  await page.getByTestId('add-group').click()
+  await expectGroupListed(page, name)
+}
+
+/** Unique per run, so repeated runs against the shared fixture event do not collide. */
+export function uniqueName(prefix) {
+  return `${prefix} ${Date.now()}-${Math.floor(Math.random() * 1000)}`
+}

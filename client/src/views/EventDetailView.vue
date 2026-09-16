@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { describeError } from '@/api/client.js'
 import { useAuthStore } from '@/stores/auth.js'
+import PlanSchedule from '@/components/PlanSchedule.vue'
 
 const props = defineProps({ eventId: { type: String, required: true } })
 
@@ -60,6 +61,18 @@ async function load() {
     error.value = describeError(requestError)
   } finally {
     loading.value = false
+  }
+}
+
+async function reloadConflicts() {
+  // Conflicts are derived from assignments, so any change to the schedule invalidates the count
+  // shown beside them.
+  try {
+    const { data } = await auth.api().get(`/events/${props.eventId}/conflicts`)
+    conflicts.value = data.conflicts ?? []
+    unresolvedCount.value = data.unresolvedCount ?? 0
+  } catch (requestError) {
+    error.value = describeError(requestError)
   }
 }
 
@@ -190,6 +203,11 @@ onMounted(load)
               </ul>
             </div>
           </div>
+        </div>
+
+        <!-- Groups and their itinerary slots -->
+        <div v-if="canViewPlans" class="col-12">
+          <PlanSchedule :event-id="eventId" :zones="layout?.zones ?? []" @changed="reloadConflicts" />
         </div>
 
         <!-- Announcements -->

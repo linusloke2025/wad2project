@@ -54,6 +54,42 @@ export function assertE2eDatabase(uri, { force = false } = {}) {
 }
 
 /**
+ * Remove the fixture event's mutable data so each run starts from the same state.
+ *
+ * Without this the suite accumulates: a test that creates an overlapping pair leaves conflicts
+ * behind, the next run's "no double booking" assertion finds them, and the failure looks like a
+ * product bug rather than leftover data. Fixtures are only fixtures if they are deterministic.
+ */
+export async function resetE2E({ uri }) {
+  assertE2eDatabase(uri)
+
+  const alreadyConnected = mongoose.connection.readyState === 1
+  if (!alreadyConnected) {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 })
+  }
+
+  const collections = mongoose.connection.collection.bind(mongoose.connection)
+  const event = await collections('events').findOne({ name: E2E_EVENT_NAME })
+
+  if (event) {
+    const eventId = event._id
+    const announcements = await collections('announcements').find({ eventId }).toArray()
+
+    await collections('assignmentacks').deleteMany({
+      announcementId: { $in: announcements.map((a) => a._id) },
+    })
+    await collections('announcements').deleteMany({ eventId })
+    await collections('assignments').deleteMany({ eventId })
+    await collections('groups').deleteMany({ eventId })
+    await collections('zones').deleteMany({ eventId })
+  }
+
+  if (!alreadyConnected) {
+    await mongoose.disconnect()
+  }
+}
+
+/**
  * @param {{uri: string, force?: boolean}} options
  * @returns {Promise<{communityId: string, eventId: string, userIds: Record<string, string>}>}
  */
