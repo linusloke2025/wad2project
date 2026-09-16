@@ -1,32 +1,25 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 
 import { describeError } from '@/api/client.js'
 import { useAuthStore } from '@/stores/auth.js'
 import PlanSchedule from '@/components/PlanSchedule.vue'
+import LiveBoard from '@/components/LiveBoard.vue'
 
 const props = defineProps({ eventId: { type: String, required: true } })
 
 const auth = useAuthStore()
-const route = useRoute()
 
 const event = ref(null)
 const layout = ref(null)
 const conflicts = ref([])
 const unresolvedCount = ref(0)
-const announcements = ref([])
 const loading = ref(true)
 const error = ref('')
 
 // Which panels this role may even ask for. The server refuses regardless; this only avoids
-// showing a user a button that will 403.
+// showing a role a panel that would 403.
 const canViewPlans = computed(() => auth.canViewPlans)
-const canManageLayout = computed(() => auth.canManageLayout)
-const canBroadcast = computed(() => auth.canBroadcast)
-
-const announcementDraft = ref('')
-const announcementError = ref('')
 
 const conflictLabels = {
   zone_double_booking: 'Two groups hold the same zone at overlapping times',
@@ -41,21 +34,17 @@ async function load() {
 
   try {
     const api = auth.api()
-    // Only the event itself is needed for every role; the planning panels are loaded
-    // opportunistically so a member without them still gets a usable page.
     const eventResponse = await api.get(`/events/${props.eventId}`)
     event.value = eventResponse.data
 
     if (canViewPlans.value) {
-      const [layoutResponse, conflictResponse, announcementResponse] = await Promise.all([
+      const [layoutResponse, conflictResponse] = await Promise.all([
         api.get(`/events/${props.eventId}/layout`),
         api.get(`/events/${props.eventId}/conflicts`),
-        api.get(`/events/${props.eventId}/announcements`),
       ])
       layout.value = layoutResponse.data
       conflicts.value = conflictResponse.data.conflicts ?? []
       unresolvedCount.value = conflictResponse.data.unresolvedCount ?? 0
-      announcements.value = announcementResponse.data.announcements ?? []
     }
   } catch (requestError) {
     error.value = describeError(requestError)
@@ -76,28 +65,9 @@ async function reloadConflicts() {
   }
 }
 
-async function broadcast() {
-  announcementError.value = ''
-  if (announcementDraft.value.trim() === '') return
-
-  try {
-    await auth.api().post(`/events/${props.eventId}/announcements`, { body: announcementDraft.value })
-    announcementDraft.value = ''
-    const { data } = await auth.api().get(`/events/${props.eventId}/announcements`)
-    announcements.value = data.announcements ?? []
-  } catch (requestError) {
-    announcementError.value = describeError(requestError)
-  }
-}
-
 function formatWindow() {
   if (!event.value?.start || !event.value?.end) return 'No scheduled window'
   return `${new Date(event.value.start).toLocaleString()} – ${new Date(event.value.end).toLocaleTimeString()}`
-}
-
-function tallyLabel(tally) {
-  if (!tally) return ''
-  return `${tally.counts.acknowledged} of ${tally.totalGroups} acknowledged`
 }
 
 onMounted(load)
@@ -210,51 +180,15 @@ onMounted(load)
           <PlanSchedule :event-id="eventId" :zones="layout?.zones ?? []" @changed="reloadConflicts" />
         </div>
 
-        <!-- Announcements -->
-        <div v-if="canViewPlans" class="col-12">
-          <div class="card">
-            <div class="card-body">
-              <h2 class="h6 card-title">Announcements</h2>
-
-              <div v-if="announcementError" class="alert alert-danger py-2 small" role="alert">
-                {{ announcementError }}
-              </div>
-
-              <form v-if="canBroadcast" class="mb-3" @submit.prevent="broadcast">
-                <label class="form-label small" for="announcement">Broadcast to every group</label>
-                <div class="input-group">
-                  <input
-                    id="announcement"
-                    v-model="announcementDraft"
-                    class="form-control"
-                    placeholder="e.g. Group 3 delayed 10 minutes — hold position"
-                    data-testid="announcement-input"
-                  />
-                  <button class="btn btn-primary" type="submit" data-testid="send-announcement">Send</button>
-                </div>
-                <div class="form-text">One-way. Group leads reply with a fixed signal, not text.</div>
-              </form>
-
-              <p v-if="announcements.length === 0" class="text-body-secondary small mb-0" data-testid="no-announcements">
-                Nothing announced yet.
-              </p>
-
-              <ul v-else class="list-group list-group-flush" data-testid="announcement-list">
-                <li v-for="item in announcements" :key="item.id" class="list-group-item px-0">
-                  <div class="small">{{ item.body }}</div>
-                  <div class="text-body-secondary small mt-1" data-testid="ack-tally">
-                    {{ tallyLabel(item.acknowledgements) }}
-                    <span v-if="item.acknowledgements?.needHelpGroupIds?.length" class="badge text-bg-warning ms-1">
-                      {{ item.acknowledgements.needHelpGroupIds.length }} need help
-                    </span>
-                    <span v-if="item.acknowledgements?.awaitingResponseGroupIds?.length" class="badge text-bg-light text-dark ms-1">
-                      {{ item.acknowledgements.awaitingResponseGroupIds.length }} not answered
-                    </span>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
+        <!--
+          The live board is shown to every role, because live.view is granted to all: an
+          ordinary group lead needs to see where their group is and to receive announcements.
+          Announcements live inside the board rather than in a separate planning-only panel —
+          gating them behind a planning role was hiding them from exactly the people meant to
+          receive them.
+        -->
+        <div class="col-12">
+          <LiveBoard :event-id="eventId" />
         </div>
       </div>
     </template>

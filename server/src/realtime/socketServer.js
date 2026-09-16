@@ -84,8 +84,12 @@ export function createRealtimeServer({ httpServer, tokenService, repositories, l
         await socket.join(EVENT_ROOM_PREFIX + event.id)
         socket.data.eventId = event.id
 
-        // Hand back the current board so the client does not need a second round trip.
-        return ack({ ok: true, groups: liveState.snapshot(event.id) })
+        // Deliberately does NOT return the board. The room membership is all the socket needs to
+        // establish, and the authoritative, community-scoped board comes from
+        // `GET /api/events/:id/live`. Returning the raw live state here duplicated the merge and
+        // scoping rules, and because that raw snapshot is empty until someone reports, it
+        // clobbered the correct HTTP board whenever the socket connected after it.
+        return ack({ ok: true })
       } catch (error) {
         return ack({ ok: false, error: error.message })
       }

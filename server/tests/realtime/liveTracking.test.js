@@ -423,6 +423,19 @@ describe('realtime — snapshot endpoint', () => {
     expect(body.groups.map((group) => group.groupId)).toEqual([oid(11)])
   })
 
+  it('lists a group that has never reported, so silence is visible rather than absent', async () => {
+    // A board that lists only the groups that have reported hides the ones that have not — and
+    // a group nobody has heard from is precisely the problem the app exists to surface.
+    const token = await sessionFor('planner@example.com', 'plannerpass')
+
+    const { status, body } = await request(`/api/events/${oid(20)}/live`, { token })
+
+    expect(status).toBe(200)
+    expect(body.groups).toHaveLength(2)
+    expect(body.groups.every((group) => group.status === null)).toBe(true)
+    expect(body.groups.map((group) => group.name).sort()).toEqual(['Group A', 'Group B'])
+  })
+
   it('shows an ordinary member who leads nothing an empty board rather than other groups', async () => {
     const token = await sessionFor('member@example.com', 'memberpass')
     liveState.setStatus({ eventId: oid(20), groupId: oid(11), status: 'arrived' })

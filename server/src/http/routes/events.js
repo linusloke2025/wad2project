@@ -198,23 +198,36 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
       const event = await loadEvent(req, res)
       if (!event) return undefined
 
+      const eventGroups = await repositories.groups.listByEvent(event.id)
       const snapshot = liveState.snapshot(event.id)
+      const liveByGroup = new Map(snapshot.map((entry) => [entry.groupId, entry]))
+
+      // Every group appears, whether or not it has reported. A board that lists only the groups
+      // that have said something hides the ones that have not — and a group nobody has heard
+      // from is exactly the silence this app exists to surface.
+      let board = eventGroups.map((group) => ({
+        groupId: group.id,
+        name: group.name,
+        status: null,
+        position: null,
+        updatedAt: null,
+        ...(liveByGroup.get(group.id) ?? {}),
+        // Spread last-but-one so a stale snapshot cannot rename or re-key a group that has since
+        // been deleted and recreated.
+        groupId: group.id,
+        name: group.name,
+      }))
 
       // Planning roles see the whole board. An ordinary user holds live.view too, but scoped to
       // the groups they lead — they need their own position, not everyone else's.
-      if (req.auth.role !== 'user') {
-        return res.json({ eventId: event.id, groups: snapshot })
+      if (req.auth.role === 'user') {
+        board = board.filter((entry) => {
+          const group = eventGroups.find((candidate) => candidate.id === entry.groupId)
+          return Boolean(group && group.leadUserId === req.auth.userId)
+        })
       }
 
-      const groups = await repositories.groups.listByEvent(event.id)
-      const ledGroupIds = new Set(
-        groups.filter((group) => group.leadUserId === req.auth.userId).map((group) => group.id),
-      )
-
-      return res.json({
-        eventId: event.id,
-        groups: snapshot.filter((entry) => ledGroupIds.has(entry.groupId)),
-      })
+      return res.json({ eventId: event.id, groups: board })
     } catch (error) {
       return next(error)
     }

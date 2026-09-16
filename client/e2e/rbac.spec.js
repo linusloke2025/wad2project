@@ -38,7 +38,7 @@ test.describe('Journey 2 — role-based access', () => {
     await expect(page.getByTestId('add-group')).toHaveCount(0)
   })
 
-  test('an ordinary member is not shown the plan at all', async ({ page }) => {
+  test('an ordinary member is not shown the plan, but does get the live board', async ({ page }) => {
     await signIn(page, E2E_USERS.member)
     await openSeededEvent(page, 'E2E Parade')
 
@@ -46,6 +46,10 @@ test.describe('Journey 2 — role-based access', () => {
     // including group composition and the conflict list, are not theirs to see.
     await expect(page.getByTestId('conflict-count')).toHaveCount(0)
     await expect(page.getByTestId('group-list')).toHaveCount(0)
-    await expect(page.getByTestId('announcement-list')).toHaveCount(0)
+    await expect(page.getByTestId('zone-count')).toHaveCount(0)
+
+    // The live board is a different matter: live.view is granted to every role, because a group
+    // lead on the ground needs their own status and has to receive announcements.
+    await expect(page.getByTestId('live-connection')).toBeVisible()
   })
 })
