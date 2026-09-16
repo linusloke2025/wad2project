@@ -288,8 +288,8 @@ requires.
   or undo; a wrong shape is cleared and redrawn.
 - **A Plan layout is an image, not a geo-referenced map.** Its transitions are estimated from the
   pixel-to-metre scale rather than routed, which the UI labels as an estimate.
-- **Groups are created without a leader** in the UI. Leader assignment exists in the API and the
-  data model, but the member-picker is not wired.
+- **A group is created without a leader.** Leadership is assigned afterwards from the group's
+  Members panel, and a group with no lead cannot report a status.
 - **Track retention is not automated.** The spec sets a 30-day post-event deletion policy for
   location history; the schema supports the sweep but no job performs it yet.
 - **Position history is not stored per ping** — only the latest position per group is kept in
