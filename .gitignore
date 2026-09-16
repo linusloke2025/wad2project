@@ -23,6 +23,14 @@ test-results/
 Brief.pdf
 docs/brief-decoded.txt
 
+# OneMap credentials and saved docs — the repo is public, so these must never be committed.
+# The pasted access token is a JWT that expires (3-day lifetime), so it also must not be
+# relied on as a permanent key.
+openmap.txt
+Static Map*.html
+.env
+.env.local
+
 # Editor / OS
 .DS_Store
 Thumbs.db
