@@ -124,6 +124,11 @@ export function createMongooseRepositories() {
         return toDto(await Group.create(fields))
       },
 
+      async findById(id) {
+        if (!isValidId(id)) return null
+        return toDto(await Group.findById(id))
+      },
+
       async listByEvent(eventId) {
         if (!isValidId(eventId)) return []
         return toDtoList(await Group.find({ eventId }))

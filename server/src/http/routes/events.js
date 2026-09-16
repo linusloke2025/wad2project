@@ -28,7 +28,7 @@ function isValidPolygon(polygon) {
   )
 }
 
-export function createEventsRouter({ repositories, conflictService, staticMapService }) {
+export function createEventsRouter({ repositories, conflictService, staticMapService, liveState }) {
   const router = Router()
 
   async function loadEvent(req, res) {
@@ -175,6 +175,33 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
         warning: map.warning,
         omittedShapes: map.omittedShapes,
         zones,
+      })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.get('/:eventId/live', requireCapability('live.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const snapshot = liveState.snapshot(event.id)
+
+      // Planning roles see the whole board. An ordinary user holds live.view too, but scoped to
+      // the groups they lead — they need their own position, not everyone else's.
+      if (req.auth.role !== 'user') {
+        return res.json({ eventId: event.id, groups: snapshot })
+      }
+
+      const groups = await repositories.groups.listByEvent(event.id)
+      const ledGroupIds = new Set(
+        groups.filter((group) => group.leadUserId === req.auth.userId).map((group) => group.id),
+      )
+
+      return res.json({
+        eventId: event.id,
+        groups: snapshot.filter((entry) => ledGroupIds.has(entry.groupId)),
       })
     } catch (error) {
       return next(error)

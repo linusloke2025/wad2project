@@ -15,8 +15,9 @@ import { createAuthRouter } from './http/routes/auth.js'
 import { createEventsRouter } from './http/routes/events.js'
 import { createConflictService } from './services/conflictService.js'
 import { createStaticMapService } from './services/staticMapService.js'
+import { createLiveState } from './realtime/liveState.js'
 
-export function createApp({ tokenService, repositories, conflictService, staticMapService } = {}) {
+export function createApp({ tokenService, repositories, conflictService, staticMapService, liveState } = {}) {
   if (!tokenService) throw new Error('createApp requires a tokenService')
   if (!repositories) throw new Error('createApp requires repositories')
 
@@ -29,6 +30,8 @@ export function createApp({ tokenService, repositories, conflictService, staticM
   // Defaults to a plan-mode service, which estimates walk times and needs no OneMap client.
   const conflicts = conflictService ?? createConflictService({ onemapClient: null })
   const staticMaps = staticMapService ?? createStaticMapService()
+  // Shared with the Socket.IO layer so the live board and the HTTP resync read one store.
+  const live = liveState ?? createLiveState()
 
   // Unauthenticated by design: logging in is how you get a token.
   app.use('/api/auth', createAuthRouter({ tokenService, repositories }))
@@ -47,7 +50,7 @@ export function createApp({ tokenService, repositories, conflictService, staticM
     '/api/events',
     auth,
     requirePasswordChanged,
-    createEventsRouter({ repositories, conflictService: conflicts, staticMapService: staticMaps }),
+    createEventsRouter({ repositories, conflictService: conflicts, staticMapService: staticMaps, liveState: live }),
   )
 
   app.use((req, res) => {

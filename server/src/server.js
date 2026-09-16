@@ -9,11 +9,14 @@
  */
 
 import 'dotenv/config'
+import http from 'node:http'
 import mongoose from 'mongoose'
 
 import { createApp } from './app.js'
 import { createTokenService } from './auth/tokens.js'
 import { loadConfig } from './config.js'
+import { createLiveState } from './realtime/liveState.js'
+import { createRealtimeServer } from './realtime/socketServer.js'
 import { createMongooseRepositories } from './repositories/mongooseRepositories.js'
 import { createConflictService } from './services/conflictService.js'
 import { createOneMapClient } from './services/onemapClient.js'
@@ -34,14 +37,24 @@ export async function startServer({ env = process.env } = {}) {
     ? createOneMapClient({ email: config.onemapEmail, password: config.onemapPassword })
     : null
 
+  const tokenService = createTokenService({ secret: config.jwtSecret })
+  const repositories = createMongooseRepositories()
+  // One store shared by the Socket.IO layer and the HTTP live-snapshot route, so a reconnecting
+  // client resyncs against the same view it was receiving.
+  const liveState = createLiveState()
+
   const app = createApp({
-    tokenService: createTokenService({ secret: config.jwtSecret }),
-    repositories: createMongooseRepositories(),
+    tokenService,
+    repositories,
     conflictService: createConflictService({ onemapClient }),
     staticMapService: createStaticMapService(),
+    liveState,
   })
 
-  return app.listen(config.port, () => {
+  const httpServer = http.createServer(app)
+  createRealtimeServer({ httpServer, tokenService, repositories, liveState })
+
+  return httpServer.listen(config.port, () => {
     console.log(`Listening on http://localhost:${config.port}`)
     console.log(
       onemapClient
