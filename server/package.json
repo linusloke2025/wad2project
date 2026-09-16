@@ -5,8 +5,8 @@
   "type": "module",
   "description": "IS216 event-coordination app — Express + MongoDB backend",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
     "seed": "node src/scripts/seed.js",
     "test:unit": "vitest run --pool=threads"
   },
