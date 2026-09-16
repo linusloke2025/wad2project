@@ -4,18 +4,24 @@
  * Credentials never leave the server: the browser talks to our API, and our server talks to
  * OneMap. This module owns the access token so the rest of the app never sees it.
  *
- * Verified from OneMap's documented behaviour: tokens come from
- * POST /api/auth/post/getToken with `{email, password}`, and the response carries
- * `access_token` plus `expiry_timestamp`. The CRAN `onemapsgapi` wrapper parses
- * `expiry_timestamp` via `as.POSIXct(as.integer(...), origin="1970-01-01")`, which is evidence
- * it is epoch SECONDS — so it is treated as such here rather than guessed as ISO.
+ * Auth is VERIFIED against the live API: POST /api/auth/post/getToken with `{email, password}`
+ * returns `access_token` plus `expiry_timestamp`. Inspecting a live token showed a 72.0 hour
+ * lifetime with `expiry_timestamp` equal to the JWT's own `exp`, confirming it is epoch SECONDS
+ * — so it is treated as such here rather than guessed as ISO.
  *
- * UNVERIFIED (confirm against the live API before relying on it):
- *   - the exact routing endpoint path, and
- *   - the routing response shape. OneMap's docs pages are JS-rendered and returned empty
- *     bodies, so the parsing below models the wrapper's summary-route output
- *     (`route_summary.total_time` / `total_distance`) and the units (seconds / metres).
- * Both are isolated here so a correction is a one-file change.
+ * Routing is VERIFIED against the live API too. GET /api/public/routingsvc/route with
+ * `start=lat,lng&end=lat,lng&routeType=walk` and the raw token in the `Authorization` header
+ * (no "Bearer" prefix) returns:
+ *
+ *   { status_message, route_geometry, status, route_instructions, route_name,
+ *     route_summary: { start_point, end_point, total_time: 164, total_distance: 227 } }
+ *
+ * So the field path below is correct, and the units are seconds and metres. A 227m walk taking
+ * 164s works out at ~1.38 m/s, consistent with walking pace.
+ *
+ * NOT verified: documented rate limits. OneMap's docs pages are JS-rendered and returned empty
+ * bodies, so no numeric limit could be confirmed. Route results are cached by zone pair upstream
+ * in walkTimeProvider, which is what keeps call volume off the keystroke path.
  */
 
 const DEFAULT_BASE_URL = 'https://www.onemap.gov.sg'

@@ -216,7 +216,23 @@ Settled: conflict severity (advisory), conflict timing (live with cached routes)
 creation and lead designation (planner), first-password flow (temp + forced change), track
 retention (30 days post-event).
 
-Still to confirm during implementation — all external, none blocking:
+Verified against the **live** OneMap API (round 6, with real credentials):
 
-- OneMap documented rate limits and token lifetime (official docs are JS-rendered; confirm at setup).
+- **Auth**: `POST /api/auth/post/getToken` with `{email, password}` returns `access_token` plus
+  `expiry_timestamp`, which is epoch **seconds**. Observed token lifetime: **72.0 hours**.
+- **Routing**: `GET /api/public/routingsvc/route?start=lat,lng&end=lat,lng&routeType=walk` with the
+  raw token in the **`Authorization` header** (no `Bearer` prefix). The `token` query param returns
+  401. Response carries `route_summary.total_time` (**seconds**) and `.total_distance` (**metres**).
+- **Static Map**: `GET /api/staticmap/getStaticImage` needs **no authentication** at all. Polygons
+  are **pipe**-separated with a **colon** before the colour (the docs prose says semicolon and is
+  wrong), and the ring must be closed. Some failures return **HTTP 200 with a JSON body**, so the
+  content type — not `response.ok` — is the success signal.
+
+Guarded by an opt-in live test at `server/tests/live/onemap.live.test.js`, which skips when
+credentials are absent so a fresh clone and CI stay green.
+
+Still unknown — neither blocking:
+
+- OneMap documented **rate limits** (their docs pages are JS-rendered; no numeric limit confirmed).
+  Route results are cached by zone pair upstream, which keeps call volume off the keystroke path.
 - MongoDB Atlas M0 exact storage quota.
