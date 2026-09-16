@@ -19,6 +19,10 @@ playwright-report/
 test-results/
 .vite/
 
+# Playwright browsers, downloaded into the workspace because the sandbox blocks writing to
+# %LOCALAPPDATA%. They are a ~115MB binary, not source.
+.playwright-browsers/
+
 # School materials — not ours to publish in a public repo
 Brief.pdf
 docs/brief-decoded.txt
