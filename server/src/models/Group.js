@@ -13,6 +13,9 @@ const groupSchema = new mongoose.Schema(
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
     name: { type: String, required: true, trim: true },
     leadUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Who is in the group. An embedded list rather than a join collection because a group's
+    // membership is read as a whole, never queried from the user's side.
+    memberIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'User', default: [] },
   },
   { timestamps: true },
 )

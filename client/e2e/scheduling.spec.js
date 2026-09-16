@@ -51,4 +51,27 @@ test.describe('Journey 4 — scheduling', () => {
 
     await expect(page.getByTestId('schedule-error')).toContainText('Choose a group')
   })
+
+  test('a planner staffs a group and designates its lead', async ({ page }) => {
+    // A group with no lead can never report a status, so this is what makes a group operative
+    // rather than merely listed.
+    await signIn(page, E2E_USERS.planner)
+    await openSeededEvent(page, 'E2E Parade')
+
+    const name = uniqueName('Staffed Group')
+    await addGroup(page, name)
+
+    // Scoped to the row, because every group shares the same set of controls.
+    const row = page.locator(`li[data-group-name="${name}"]`)
+    await expect(row.getByTestId('manage-group')).toContainText('Members (0)')
+
+    await row.getByTestId('manage-group').click()
+    await row.getByTestId('member-checkbox').first().check()
+    // Index 0 is "No lead"; index 1 is the member just ticked.
+    await row.getByTestId('lead-select').selectOption({ index: 1 })
+    await row.getByTestId('save-members').click()
+
+    await expect(row.getByTestId('lead-badge')).toBeVisible()
+    await expect(row.getByTestId('manage-group')).toContainText('Members (1)')
+  })
 })

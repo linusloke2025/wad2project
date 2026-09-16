@@ -19,6 +19,35 @@ import { requireCapability } from '../middleware/requireCapability.js'
 export function createMembersRouter({ repositories }) {
   const router = Router()
 
+  /**
+   * The community roster, for choosing who belongs to a group.
+   *
+   * Gated by `group.manage` rather than a member-management capability: the only reason a planner
+   * needs the roster is to staff a group, and a layout designer has no business with it. The
+   * response deliberately carries only what a picker needs — no password hashes, no timestamps.
+   */
+  router.get('/', requireCapability('group.manage'), async (req, res, next) => {
+    try {
+      const memberships = await repositories.memberships.listByCommunity(req.auth.communityId)
+      const members = []
+
+      for (const membership of memberships) {
+        const user = await repositories.users.findById(membership.userId)
+        if (!user) continue
+        members.push({
+          userId: user.id,
+          email: user.email,
+          name: user.name ?? '',
+          role: membership.role,
+        })
+      }
+
+      return res.json({ members })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
   router.post('/import', requireCapability('user.massAdd'), async (req, res, next) => {
     try {
       const { csv } = req.body ?? {}

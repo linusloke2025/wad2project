@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Mongoose-backed repositories.
  *
  * These implement the same plain-object interface the HTTP tests drive with in-memory fakes, so
  * swapping one for the other is a one-line change in the server entry point.
  *
  * Every method that takes an id guards it first. Mongoose casts an id string before querying, so
- * a malformed id throws a CastError — which would surface as an HTTP 500 instead of the 404 the
+ * a malformed id throws a CastError â€” which would surface as an HTTP 500 instead of the 404 the
  * route promises. Guarding before the query also means those paths never reach the database,
  * which is why they can be tested without a cluster.
  *
@@ -49,7 +49,7 @@ export function createMongooseRepositories() {
       async updatePassword(id, { passwordHash, mustChangePassword }) {
         if (!isValidId(id)) return null
         return toDto(
-          await User.findByIdAndUpdate(id, { passwordHash, mustChangePassword }, { new: true }),
+          await User.findByIdAndUpdate(id, { passwordHash, mustChangePassword }, { returnDocument: 'after' }),
         )
       },
     },
@@ -58,6 +58,11 @@ export function createMongooseRepositories() {
       async listByUser(userId) {
         if (!isValidId(userId)) return []
         return toDtoList(await Membership.find({ userId }))
+      },
+
+      async listByCommunity(communityId) {
+        if (!isValidId(communityId)) return []
+        return toDtoList(await Membership.find({ communityId }))
       },
 
       async find(userId, communityId) {
@@ -103,7 +108,7 @@ export function createMongooseRepositories() {
 
       async updateLayoutImage(eventId, layoutImageId) {
         if (!isValidId(eventId)) return null
-        return toDto(await Event.findByIdAndUpdate(eventId, { layoutImageId }, { new: true }))
+        return toDto(await Event.findByIdAndUpdate(eventId, { layoutImageId }, { returnDocument: 'after' }))
       },
     },
 
@@ -184,6 +189,11 @@ export function createMongooseRepositories() {
         return toDto(await Group.findById(id))
       },
 
+      async update(groupId, fields) {
+        if (!isValidId(groupId)) return null
+        return toDto(await Group.findByIdAndUpdate(groupId, fields, { returnDocument: 'after' }))
+      },
+
       async listByEvent(eventId) {
         if (!isValidId(eventId)) return []
         return toDtoList(await Group.find({ eventId }))
@@ -225,7 +235,7 @@ export function createMongooseRepositories() {
           await AnnouncementAck.findOneAndUpdate(
             { announcementId, groupId },
             { status, at },
-            { new: true, upsert: true, setDefaultsOnInsert: true },
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
           ),
         )
       },

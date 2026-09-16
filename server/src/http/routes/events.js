@@ -158,6 +158,62 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
     }
   })
 
+  /**
+   * Assign a group's members and designate its leader.
+   *
+   * The invariant enforced here is that a lead must be one of the group's members. Without it a
+   * lead could report on behalf of people they are not part of, and the live board would present
+   * that as authoritative to planners — which is worse than refusing it.
+   */
+  router.patch('/:eventId/groups/:groupId', requireCapability('group.manage'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const group = await repositories.groups.findById(req.params.groupId)
+      // A group from another event is "not found" rather than forbidden, so a caller cannot probe
+      // for groups they have no business knowing about.
+      if (!group || group.eventId !== event.id) {
+        return res.status(404).json({ error: 'Group not found' })
+      }
+
+      const { memberIds, leadUserId } = req.body ?? {}
+
+      if (memberIds !== undefined && !Array.isArray(memberIds)) {
+        return res.status(400).json({ error: 'memberIds must be an array of user ids' })
+      }
+
+      const nextMemberIds = memberIds === undefined ? (group.memberIds ?? []) : memberIds
+      const nextLeadUserId = leadUserId === undefined ? (group.leadUserId ?? null) : leadUserId
+
+      // Membership is per community, so a group cannot be staffed from outside it.
+      const memberships = await repositories.memberships.listByCommunity(req.auth.communityId)
+      const communityUserIds = new Set(memberships.map((entry) => entry.userId))
+
+      const outsider = nextMemberIds.find((userId) => !communityUserIds.has(userId))
+      if (outsider) {
+        return res.status(400).json({ error: 'Every member must belong to this community' })
+      }
+
+      if (
+        nextLeadUserId !== null &&
+        nextLeadUserId !== undefined &&
+        !nextMemberIds.includes(nextLeadUserId)
+      ) {
+        return res.status(400).json({ error: 'The lead must be a member of the group' })
+      }
+
+      const updated = await repositories.groups.update(group.id, {
+        memberIds: nextMemberIds,
+        leadUserId: nextLeadUserId ?? null,
+      })
+
+      return res.json(updated)
+    } catch (error) {
+      return next(error)
+    }
+  })
+
   router.post('/:eventId/assignments', requireCapability('group.manage'), async (req, res, next) => {
     try {
       const event = await loadEvent(req, res)

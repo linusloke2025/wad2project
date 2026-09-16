@@ -22,11 +22,16 @@ const auth = useAuthStore()
 
 const groups = ref([])
 const assignments = ref([])
+const members = ref([])
 const error = ref('')
 const busy = ref(false)
 
 const groupName = ref('')
 const draft = ref({ groupId: '', zoneId: '', start: '', end: '' })
+
+// Which group's membership panel is open, and the pending edits for it.
+const managingGroupId = ref(null)
+const memberDraft = ref({ memberIds: [], leadUserId: null })
 
 // Blocked areas and obstacles are not somewhere a group can be scheduled.
 const assignableZones = computed(() => props.zones.filter((zone) => (zone.kind ?? 'zone') === 'zone'))
@@ -55,6 +60,59 @@ async function load() {
     assignments.value = assignmentResponse.data.assignments ?? []
   } catch (requestError) {
     error.value = describeError(requestError)
+  }
+}
+
+/** The roster is only needed by a role that may staff a group. */
+async function loadMembers() {
+  if (!canManage.value) return
+  try {
+    const { data } = await auth.api().get('/members')
+    members.value = data.members ?? []
+  } catch (requestError) {
+    error.value = describeError(requestError)
+  }
+}
+
+function memberLabel(userId) {
+  return members.value.find((member) => member.userId === userId)?.email ?? userId
+}
+
+function startManaging(group) {
+  managingGroupId.value = group.id
+  memberDraft.value = {
+    memberIds: [...(group.memberIds ?? [])],
+    leadUserId: group.leadUserId ?? null,
+  }
+}
+
+function toggleMember(userId) {
+  const current = memberDraft.value.memberIds
+  const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+
+  memberDraft.value = {
+    memberIds: next,
+    // Unticking someone who was the lead leaves the group leaderless rather than keeping a lead
+    // who is no longer a member — which the API would refuse anyway.
+    leadUserId: next.includes(memberDraft.value.leadUserId) ? memberDraft.value.leadUserId : null,
+  }
+}
+
+async function saveMembers(groupId) {
+  error.value = ''
+  busy.value = true
+  try {
+    await auth.api().patch(`/events/${props.eventId}/groups/${groupId}`, {
+      memberIds: memberDraft.value.memberIds,
+      leadUserId: memberDraft.value.leadUserId,
+    })
+    managingGroupId.value = null
+    await load()
+    emit('changed')
+  } catch (requestError) {
+    error.value = describeError(requestError)
+  } finally {
+    busy.value = false
   }
 }
 
@@ -102,7 +160,9 @@ async function addAssignment() {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await Promise.all([load(), loadMembers()])
+})
 </script>
 
 <template>
@@ -122,10 +182,19 @@ onMounted(load)
       </p>
 
       <ul v-else class="list-group list-group-flush mb-3" data-testid="group-list">
-        <li v-for="group in groups" :key="group.id" class="list-group-item px-0">
+        <li
+          v-for="group in groups"
+          :key="group.id"
+          class="list-group-item px-0"
+          data-testid="group-row"
+          :data-group-name="group.name"
+        >
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div class="small fw-semibold" data-testid="group-name">{{ group.name }}</div>
-            <span v-if="group.leadUserId" class="badge text-bg-info">lead assigned</span>
+            <span v-if="group.leadUserId" class="badge text-bg-info" data-testid="lead-badge">
+              lead: {{ memberLabel(group.leadUserId) }}
+            </span>
+            <span v-else class="badge text-bg-light text-dark">no lead</span>
           </div>
 
           <ul v-if="assignments.filter((a) => a.groupId === group.id).length" class="list-unstyled small text-body-secondary mb-0 mt-1">
@@ -134,6 +203,71 @@ onMounted(load)
             </li>
           </ul>
           <div v-else class="small text-body-secondary mt-1" data-testid="group-unscheduled">No slots scheduled</div>
+
+          <!--
+            Membership and leadership. A group with no lead can never report a status, so this is
+            what makes a group operative rather than merely listed.
+          -->
+          <div v-if="canManage" class="mt-2">
+            <button
+              v-if="managingGroupId !== group.id"
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              data-testid="manage-group"
+              @click="startManaging(group)"
+            >
+              Members ({{ (group.memberIds ?? []).length }})
+            </button>
+
+            <div v-else class="border rounded p-2">
+              <p v-if="members.length === 0" class="small text-body-secondary mb-2">
+                No members in this community yet. Add them in bulk from the events page.
+              </p>
+
+              <div v-for="member in members" :key="member.userId" class="form-check">
+                <input
+                  :id="`member-${group.id}-${member.userId}`"
+                  class="form-check-input"
+                  type="checkbox"
+                  :checked="memberDraft.memberIds.includes(member.userId)"
+                  data-testid="member-checkbox"
+                  @change="toggleMember(member.userId)"
+                />
+                <label class="form-check-label small" :for="`member-${group.id}-${member.userId}`">
+                  {{ member.email }}
+                </label>
+              </div>
+
+              <label class="form-label small mt-2 mb-1" :for="`lead-${group.id}`">Group lead</label>
+              <select
+                :id="`lead-${group.id}`"
+                v-model="memberDraft.leadUserId"
+                class="form-select form-select-sm"
+                data-testid="lead-select"
+              >
+                <option :value="null">No lead</option>
+                <option v-for="userId in memberDraft.memberIds" :key="userId" :value="userId">
+                  {{ memberLabel(userId) }}
+                </option>
+              </select>
+              <div class="form-text">The lead is the only member who can report a status.</div>
+
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button
+                  class="btn btn-sm btn-primary"
+                  type="button"
+                  :disabled="busy"
+                  data-testid="save-members"
+                  @click="saveMembers(group.id)"
+                >
+                  Save members
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" @click="managingGroupId = null">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </li>
       </ul>
 
