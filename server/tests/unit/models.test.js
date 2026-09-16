@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import mongoose from 'mongoose'
 
-import { User, Community, Membership, Event, Zone, Group, Assignment } from '../../src/models/index.js'
+import { User, Community, Membership, Event, Zone, Group, Assignment, Announcement, AnnouncementAck } from '../../src/models/index.js'
 import { ROLES } from '../../src/domain/permissions.js'
+import { ACK_STATUSES } from '../../src/domain/announcements.js'
 
 // Schema validation for the persistence layer.
 //
@@ -194,5 +195,43 @@ describe('Assignment', () => {
     const errors = new Assignment({ ...base(), start: at, end: at }).validateSync()?.errors
 
     expect(errors?.end).toBeDefined()
+  })
+})
+
+describe('Announcement', () => {
+  it('requires an event and body text', () => {
+    const errors = new Announcement({}).validateSync()?.errors
+
+    expect(errors?.eventId).toBeDefined()
+    expect(errors?.body).toBeDefined()
+  })
+
+  it('accepts an event and body text', () => {
+    expect(new Announcement({ eventId: oid(), body: 'Hold position' }).validateSync()).toBeUndefined()
+  })
+})
+
+describe('AnnouncementAck', () => {
+  const base = () => ({ announcementId: oid(), groupId: oid(), status: 'acknowledged' })
+
+  it('requires the announcement, the group and a signal', () => {
+    const errors = new AnnouncementAck({}).validateSync()?.errors
+
+    expect(errors?.announcementId).toBeDefined()
+    expect(errors?.groupId).toBeDefined()
+    expect(errors?.status).toBeDefined()
+  })
+
+  it('rejects a signal the domain does not define', () => {
+    const errors = new AnnouncementAck({ ...base(), status: 'shrugged' }).validateSync()?.errors
+
+    expect(errors?.status).toBeDefined()
+  })
+
+  it('accepts exactly the signals the domain defines', () => {
+    // Ties the stored enum to ACK_STATUSES, so the two cannot drift apart silently.
+    for (const status of ACK_STATUSES) {
+      expect(new AnnouncementAck({ ...base(), status }).validateSync()?.errors?.status).toBeUndefined()
+    }
   })
 })

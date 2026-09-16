@@ -4,6 +4,8 @@
  * Import through this barrel so the model names and their registration order stay in one place.
  */
 
+export { Announcement } from './Announcement.js'
+export { AnnouncementAck } from './AnnouncementAck.js'
 export { Assignment } from './Assignment.js'
 export { Community } from './Community.js'
 export { Event } from './Event.js'

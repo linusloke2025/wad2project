@@ -10,6 +10,7 @@
 
 import { Router } from 'express'
 
+import { ACK_STATUSES, summarizeAcknowledgements } from '../../domain/announcements.js'
 import { requireCapability } from '../middleware/requireCapability.js'
 
 const MIN_POLYGON_POINTS = 3
@@ -207,6 +208,104 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
       return next(error)
     }
   })
+
+  router.post('/:eventId/announcements', requireCapability('announcement.create'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const { body } = req.body ?? {}
+      if (typeof body !== 'string' || body.trim() === '') {
+        return res.status(400).json({ error: 'Announcement text is required' })
+      }
+
+      const announcement = await repositories.announcements.create({
+        eventId: event.id,
+        body: body.trim(),
+        createdBy: req.auth.userId,
+      })
+
+      return res.status(201).json(announcement)
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.get('/:eventId/announcements', requireCapability('live.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const [announcements, groups] = await Promise.all([
+        repositories.announcements.listByEvent(event.id),
+        repositories.groups.listByEvent(event.id),
+      ])
+
+      // Each announcement carries its own tally, so the board can show "2 of 3 acknowledged"
+      // and name the groups that have not answered, without a second round trip per row.
+      const withTallies = []
+      for (const announcement of announcements) {
+        const acknowledgements = await repositories.announcementAcks.listByAnnouncement(announcement.id)
+        withTallies.push({
+          ...announcement,
+          acknowledgements: summarizeAcknowledgements({ groups, acknowledgements }),
+        })
+      }
+
+      return res.json({ eventId: event.id, announcements: withTallies })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.post(
+    '/:eventId/announcements/:announcementId/ack',
+    // Reporting authority is resolved from the stored group, never from the payload, so a member
+    // cannot answer on another group's behalf and corrupt the tally.
+    requireCapability('status.report', {
+      resolveContext: async (req) => {
+        const group = await repositories.groups.findById(req.body?.groupId)
+        return {
+          isGroupLead: Boolean(group && group.leadUserId !== null && group.leadUserId === req.auth.userId),
+        }
+      },
+    }),
+    async (req, res, next) => {
+      try {
+        const event = await loadEvent(req, res)
+        if (!event) return undefined
+
+        const { groupId, status } = req.body ?? {}
+
+        // Only these three signals are accepted. Anything else — including a free-text reply
+        // someone might try to smuggle in — is refused, because that would be chat.
+        if (!ACK_STATUSES.includes(status)) {
+          return res.status(400).json({ error: `status must be one of: ${ACK_STATUSES.join(', ')}` })
+        }
+
+        const announcement = await repositories.announcements.findById(req.params.announcementId)
+        if (!announcement || announcement.eventId !== event.id) {
+          return res.status(404).json({ error: 'Announcement not found' })
+        }
+
+        const group = await repositories.groups.findById(groupId)
+        if (!group || group.eventId !== event.id) {
+          return res.status(404).json({ error: 'Group not found' })
+        }
+
+        await repositories.announcementAcks.upsert({
+          announcementId: announcement.id,
+          groupId,
+          status,
+          at: new Date().toISOString(),
+        })
+
+        return res.status(204).end()
+      } catch (error) {
+        return next(error)
+      }
+    },
+  )
 
   router.get('/:eventId/conflicts', requireCapability('conflict.view'), async (req, res, next) => {    try {
       const event = await loadEvent(req, res)

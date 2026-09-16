@@ -29,6 +29,7 @@ export const ALL_CAPABILITIES = [
   'layout.manage',
   'layout.view',
   'group.manage',
+  'announcement.create',
   'conflict.view',
   'live.view',
   'status.report',
@@ -56,6 +57,9 @@ const GRANTS = {
   // board for their own group, not the plan.
   'layout.view': ['root', 'admin', 'layout_designer', 'planner'],
   'group.manage': ['root', 'admin', 'planner'],
+  // Authoring a broadcast is a planning act. Reading one is not: announcements must reach the
+  // ground, so every role holds live.view.
+  'announcement.create': ['root', 'admin', 'planner'],
   'conflict.view': ['root', 'admin', 'layout_designer', 'planner'],
   'live.view': ['root', 'admin', 'layout_designer', 'planner', 'user'],
   'status.report': ['root', 'admin', 'layout_designer', 'planner', 'user'],

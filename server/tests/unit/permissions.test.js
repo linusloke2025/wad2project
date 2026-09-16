@@ -127,6 +127,27 @@ describe('can — layout viewing', () => {
   })
 })
 
+describe('can — announcements', () => {
+  // Announcements are one-way broadcasts, so authoring one is a planning act. Reading them is
+  // not: everyone on the ground needs to receive them, including ordinary members.
+  it('lets the planning roles broadcast an announcement', () => {
+    expect(can({ role: 'root' }, 'announcement.create')).toBe(true)
+    expect(can({ role: 'admin' }, 'announcement.create')).toBe(true)
+    expect(can({ role: 'planner' }, 'announcement.create')).toBe(true)
+  })
+
+  it('does not let a layout designer or an ordinary user broadcast', () => {
+    expect(can({ role: 'layout_designer' }, 'announcement.create')).toBe(false)
+    expect(can({ role: 'user' }, 'announcement.create')).toBe(false)
+  })
+
+  it('lets every role read the live feed, since announcements must reach the ground', () => {
+    for (const role of permissions.ROLES) {
+      expect(can({ role }, 'live.view')).toBe(true)
+    }
+  })
+})
+
 describe('can — fails closed', () => {
   it('denies every capability for an unknown role', () => {
     for (const capability of permissions.ALL_CAPABILITIES) {

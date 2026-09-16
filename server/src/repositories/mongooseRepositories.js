@@ -15,7 +15,7 @@
 
 import mongoose from 'mongoose'
 
-import { Assignment, Community, Event, Group, Membership, User, Zone } from '../models/index.js'
+import { Announcement, AnnouncementAck, Assignment, Community, Event, Group, Membership, User, Zone } from '../models/index.js'
 import { toDto, toDtoList } from './serialize.js'
 
 /** True only for values Mongoose can cast to an ObjectId. */
@@ -143,6 +143,42 @@ export function createMongooseRepositories() {
       async listByEvent(eventId) {
         if (!isValidId(eventId)) return []
         return toDtoList(await Assignment.find({ eventId }).sort({ start: 1 }))
+      },
+    },
+
+    announcements: {
+      async create({ eventId, body, createdBy = null }) {
+        return toDto(await Announcement.create({ eventId, body, createdBy }))
+      },
+
+      async findById(id) {
+        if (!isValidId(id)) return null
+        return toDto(await Announcement.findById(id))
+      },
+
+      async listByEvent(eventId) {
+        if (!isValidId(eventId)) return []
+        return toDtoList(await Announcement.find({ eventId }).sort({ createdAt: -1 }))
+      },
+    },
+
+    announcementAcks: {
+      async upsert({ announcementId, groupId, status, at = null }) {
+        if (!isValidId(announcementId) || !isValidId(groupId)) return null
+        // And upsert, so a lead correcting their answer replaces it rather than being counted
+        // twice -- exactly what the unique (announcement, group) index enforces.
+        return toDto(
+          await AnnouncementAck.findOneAndUpdate(
+            { announcementId, groupId },
+            { status, at },
+            { new: true, upsert: true, setDefaultsOnInsert: true },
+          ),
+        )
+      },
+
+      async listByAnnouncement(announcementId) {
+        if (!isValidId(announcementId)) return []
+        return toDtoList(await AnnouncementAck.find({ announcementId }))
       },
     },
   }
