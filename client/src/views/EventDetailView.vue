@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import PlanSchedule from '@/components/PlanSchedule.vue'
 import LiveBoard from '@/components/LiveBoard.vue'
 import BottleneckReport from '@/components/BottleneckReport.vue'
+import LayoutDesigner from '@/components/LayoutDesigner.vue'
 
 const props = defineProps({ eventId: { type: String, required: true } })
 
@@ -21,6 +22,7 @@ const error = ref('')
 // Which panels this role may even ask for. The server refuses regardless; this only avoids
 // showing a role a panel that would 403.
 const canViewPlans = computed(() => auth.canViewPlans)
+const canManageLayout = computed(() => auth.canManageLayout)
 
 const conflictLabels = {
   zone_double_booking: 'Two groups hold the same zone at overlapping times',
@@ -61,6 +63,21 @@ async function reloadConflicts() {
     const { data } = await auth.api().get(`/events/${props.eventId}/conflicts`)
     conflicts.value = data.conflicts ?? []
     unresolvedCount.value = data.unresolvedCount ?? 0
+  } catch (requestError) {
+    error.value = describeError(requestError)
+  }
+}
+
+/** A new or changed shape invalidates the plan, the shape list and the conflicts together. */
+async function reloadLayout() {
+  try {
+    const [layoutResponse, conflictResponse] = await Promise.all([
+      auth.api().get(`/events/${props.eventId}/layout`),
+      auth.api().get(`/events/${props.eventId}/conflicts`),
+    ])
+    layout.value = layoutResponse.data
+    conflicts.value = conflictResponse.data.conflicts ?? []
+    unresolvedCount.value = conflictResponse.data.unresolvedCount ?? 0
   } catch (requestError) {
     error.value = describeError(requestError)
   }
@@ -119,7 +136,21 @@ onMounted(load)
                 {{ layout.warning }}
               </div>
 
-              <div class="layout-surface">
+              <!--
+                A designer gets the drawing surface; everyone else gets the same layout read-only.
+                Both render the shapes from the same data, so the designer sees exactly what the
+                planner will.
+              -->
+              <LayoutDesigner
+                v-if="canManageLayout"
+                :event-id="eventId"
+                :layout-mode="event.layoutMode"
+                :layout-image-url="layout?.imageUrl ?? null"
+                :zones="layout?.zones ?? []"
+                @changed="reloadLayout"
+              />
+
+              <div v-else class="layout-surface">
                 <img
                   v-if="layout?.imageUrl"
                   :src="layout.imageUrl"

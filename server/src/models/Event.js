@@ -24,6 +24,9 @@ const eventSchema = new mongoose.Schema(
     longitude: { type: Number, default: null },
     zoom: { type: Number, default: null },
     metresPerPixel: { type: Number, default: 1 },
+    // The stored floor-plan image for a Plan layout. A string rather than a ref because the
+    // GridFS id is opaque to everything above the repository.
+    layoutImageId: { type: String, default: null },
     status: { type: String, enum: ['draft', 'live', 'ended'], default: 'draft' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },

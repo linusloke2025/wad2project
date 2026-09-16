@@ -100,6 +100,61 @@ export function createMongooseRepositories() {
         if (!isValidId(communityId)) return []
         return toDtoList(await Event.find({ communityId }).sort({ start: 1 }))
       },
+
+      async updateLayoutImage(eventId, layoutImageId) {
+        if (!isValidId(eventId)) return null
+        return toDto(await Event.findByIdAndUpdate(eventId, { layoutImageId }, { new: true }))
+      },
+    },
+
+    /**
+     * Floor-plan images, stored in GridFS.
+     *
+     * GridFS rather than a filesystem path because uploads have to survive a redeploy, and on
+     * the ephemeral hosts this app targets a local directory would not. It also keeps the images
+     * inside the same backup and quota as everything else.
+     */
+    layoutImages: {
+      bucket() {
+        return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'layoutImages' })
+      },
+
+      async put({ eventId, buffer, contentType }) {
+        const id = new mongoose.Types.ObjectId()
+        const bucket = this.bucket()
+
+        await new Promise((resolve, reject) => {
+          const stream = bucket.openUploadStreamWithId(id, `${eventId}-layout`, { contentType })
+          stream.on('error', reject)
+          stream.on('finish', resolve)
+          stream.end(buffer)
+        })
+
+        return String(id)
+      },
+
+      async get(id) {
+        if (!isValidId(id)) return null
+
+        const _id = new mongoose.Types.ObjectId(id)
+        const bucket = this.bucket()
+        const files = await bucket.find({ _id }).toArray()
+        if (files.length === 0) return null
+
+        const chunks = []
+        await new Promise((resolve, reject) => {
+          bucket
+            .openDownloadStream(_id)
+            .on('data', (chunk) => chunks.push(chunk))
+            .on('error', reject)
+            .on('end', resolve)
+        })
+
+        return {
+          buffer: Buffer.concat(chunks),
+          contentType: files[0].contentType ?? 'application/octet-stream',
+        }
+      },
     },
 
     zones: {

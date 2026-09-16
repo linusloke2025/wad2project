@@ -142,7 +142,8 @@ npm run test:unit
   handling, CSV parsing, announcement tallies, and the bottleneck report maths.
 - **HTTP behaviour**: real requests against a freshly built Express app on an ephemeral port,
   asserting status codes and payloads — including that disallowed roles receive **403 from the
-  server**, not merely that a button is hidden.
+  server**, not merely that a button is hidden. Floor-plan upload is covered for its size cap,
+  non-image rejection and byte-for-byte round trip.
 - **Schema invariants**: Mongoose validation, checked without a database.
 - **Realtime**: real Socket.IO clients, covering the handshake, room join and per-update
   authorisation.
@@ -270,8 +271,13 @@ requires.
 
 ## Known limitations
 
-- **No image upload yet.** Zones are placed by coordinates; a `POST /zones` accepts polygons
-  directly, but the designer UI for drawing them over an uploaded floor plan is not built.
+- **Zones cannot be deleted from the UI.** A shape saved by mistake has to be removed through the
+  API. The conflict engine already copes with an assignment whose zone has gone, so this is a
+  missing control rather than a broken behaviour.
+- **Zones are placed by tapping corners, with no editing afterwards.** There are no drag handles
+  or undo; a wrong shape is cleared and redrawn.
+- **A Plan layout is an image, not a geo-referenced map.** Its transitions are estimated from the
+  pixel-to-metre scale rather than routed, which the UI labels as an estimate.
 - **Groups are created without a leader** in the UI. Leader assignment exists in the API and the
   data model, but the member-picker is not wired.
 - **Track retention is not automated.** The spec sets a 30-day post-event deletion policy for

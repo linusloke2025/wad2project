@@ -9,12 +9,34 @@
  */
 
 import { Router } from 'express'
+import multer from 'multer'
 
 import { ACK_STATUSES, summarizeAcknowledgements } from '../../domain/announcements.js'
 import { buildBottleneckReport } from '../../domain/bottleneckReport.js'
 import { requireCapability } from '../middleware/requireCapability.js'
 
 const MIN_POLYGON_POINTS = 3
+
+/**
+ * Floor-plan uploads are capped because they are stored in the database, which has a fixed
+ * quota shared with all other data — an unbounded upload path would let one designer exhaust it.
+ */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+const uploadImage = multer({
+  // In memory rather than on disk: the buffer goes straight to storage, so there is no temporary
+  // file to leak or clean up if the request fails partway.
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+  fileFilter: (req, file, callback) => {
+    if (!file.mimetype?.startsWith('image/')) {
+      const error = new Error('Only image files are supported')
+      error.code = 'NOT_AN_IMAGE'
+      return callback(error)
+    }
+    return callback(null, true)
+  },
+}).single('image')
 
 function isValidPolygon(polygon) {
   return (
@@ -172,6 +194,73 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
     }
   })
 
+  // Upload the floor plan a Plan layout is drawn on.
+  //
+  // The capability guard runs before multer so a role that may not edit the layout is refused
+  // without its bytes being read or buffered at all.
+  router.post(
+    '/:eventId/layout/image',
+    requireCapability('layout.manage'),
+    (req, res, next) => {
+      uploadImage(req, res, (error) => {
+        if (!error) return next()
+
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'Image is larger than the 5MB limit' })
+        }
+        if (error.code === 'NOT_AN_IMAGE') {
+          return res.status(400).json({ error: error.message })
+        }
+        return next(error)
+      })
+    },
+    async (req, res, next) => {
+      try {
+        const event = await loadEvent(req, res)
+        if (!event) return undefined
+
+        if (!req.file) {
+          return res.status(400).json({ error: 'An image file is required' })
+        }
+
+        const layoutImageId = await repositories.layoutImages.put({
+          eventId: event.id,
+          buffer: req.file.buffer,
+          contentType: req.file.mimetype,
+        })
+
+        await repositories.events.updateLayoutImage(event.id, layoutImageId)
+
+        return res.status(201).json({ imageUrl: `/api/events/${event.id}/layout/image` })
+      } catch (error) {
+        return next(error)
+      }
+    },
+  )
+
+  router.get('/:eventId/layout/image', requireCapability('layout.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      if (!event.layoutImageId) {
+        return res.status(404).json({ error: 'No layout image has been uploaded' })
+      }
+
+      const image = await repositories.layoutImages.get(event.layoutImageId)
+      if (!image) {
+        return res.status(404).json({ error: 'No layout image has been uploaded' })
+      }
+
+      res.set('Content-Type', image.contentType)
+      // Private: the image sits behind the same authorization as the event it belongs to.
+      res.set('Cache-Control', 'private, max-age=300')
+      return res.send(image.buffer)
+    } catch (error) {
+      return next(error)
+    }
+  })
+
   router.get('/:eventId/layout', requireCapability('layout.view'), async (req, res, next) => {
     try {
       const event = await loadEvent(req, res)
@@ -180,12 +269,20 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
       const zones = await repositories.zones.listByEvent(event.id)
       const map = await staticMapService.forEvent({ event, zones })
 
+      // A Map layout is an OneMap static map; a Plan layout is whatever the designer uploaded,
+      // so its image is served from our own endpoint rather than generated.
+      const imageUrl =
+        event.layoutMode === 'map'
+          ? map.imageUrl
+          : event.layoutImageId
+            ? `/api/events/${event.id}/layout/image`
+            : null
+
       return res.json({
         eventId: event.id,
         layoutMode: event.layoutMode,
-        // Map layouts get an OneMap static map; Plan layouts get null and keep their upload.
-        imageUrl: map.imageUrl,
-        warning: map.warning,
+        imageUrl,
+        warning: event.layoutMode === 'map' ? map.warning : null,
         omittedShapes: map.omittedShapes,
         zones,
       })
