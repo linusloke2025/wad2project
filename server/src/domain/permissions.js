@@ -27,6 +27,7 @@ export const ALL_CAPABILITIES = [
   'event.edit',
   'event.control',
   'layout.manage',
+  'layout.view',
   'group.manage',
   'conflict.view',
   'live.view',
@@ -50,6 +51,10 @@ const GRANTS = {
   'event.edit': ['root', 'admin', 'planner'],
   'event.control': ['root', 'admin', 'planner'],
   'layout.manage': ['root', 'admin', 'layout_designer'],
+  // Viewing the plan is separate from editing it: a planner must see the zones to schedule
+  // movements but must not be able to move them. An ordinary user's spatial view is the live
+  // board for their own group, not the plan.
+  'layout.view': ['root', 'admin', 'layout_designer', 'planner'],
   'group.manage': ['root', 'admin', 'planner'],
   'conflict.view': ['root', 'admin', 'layout_designer', 'planner'],
   'live.view': ['root', 'admin', 'layout_designer', 'planner', 'user'],

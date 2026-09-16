@@ -28,7 +28,7 @@ function isValidPolygon(polygon) {
   )
 }
 
-export function createEventsRouter({ repositories, conflictService }) {
+export function createEventsRouter({ repositories, conflictService, staticMapService }) {
   const router = Router()
 
   async function loadEvent(req, res) {
@@ -42,7 +42,7 @@ export function createEventsRouter({ repositories, conflictService }) {
 
   router.post('/', requireCapability('event.create'), async (req, res, next) => {
     try {
-      const { name, start, end, layoutMode, metresPerPixel } = req.body ?? {}
+      const { name, start, end, layoutMode, metresPerPixel, latitude, longitude, zoom } = req.body ?? {}
 
       if (typeof name !== 'string' || name.trim() === '') {
         return res.status(400).json({ error: 'Event name is required' })
@@ -57,6 +57,11 @@ export function createEventsRouter({ repositories, conflictService }) {
         end: end ?? null,
         layoutMode: layoutMode === 'map' ? 'map' : 'plan',
         metresPerPixel,
+        // Map layouts need a centre to render a static map; without one the map degrades to a
+        // placeholder rather than failing, so these stay optional.
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
+        zoom: Number.isFinite(zoom) ? zoom : null,
         createdBy: req.auth.userId,
       })
 
@@ -154,8 +159,29 @@ export function createEventsRouter({ repositories, conflictService }) {
     }
   })
 
-  router.get('/:eventId/conflicts', requireCapability('conflict.view'), async (req, res, next) => {
+  router.get('/:eventId/layout', requireCapability('layout.view'), async (req, res, next) => {
     try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const zones = await repositories.zones.listByEvent(event.id)
+      const map = await staticMapService.forEvent({ event, zones })
+
+      return res.json({
+        eventId: event.id,
+        layoutMode: event.layoutMode,
+        // Map layouts get an OneMap static map; Plan layouts get null and keep their upload.
+        imageUrl: map.imageUrl,
+        warning: map.warning,
+        omittedShapes: map.omittedShapes,
+        zones,
+      })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.get('/:eventId/conflicts', requireCapability('conflict.view'), async (req, res, next) => {    try {
       const event = await loadEvent(req, res)
       if (!event) return undefined
 

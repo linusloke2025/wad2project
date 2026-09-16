@@ -14,8 +14,9 @@ import { requirePasswordChanged } from './http/middleware/requirePasswordChanged
 import { createAuthRouter } from './http/routes/auth.js'
 import { createEventsRouter } from './http/routes/events.js'
 import { createConflictService } from './services/conflictService.js'
+import { createStaticMapService } from './services/staticMapService.js'
 
-export function createApp({ tokenService, repositories, conflictService } = {}) {
+export function createApp({ tokenService, repositories, conflictService, staticMapService } = {}) {
   if (!tokenService) throw new Error('createApp requires a tokenService')
   if (!repositories) throw new Error('createApp requires repositories')
 
@@ -27,6 +28,7 @@ export function createApp({ tokenService, repositories, conflictService } = {}) 
 
   // Defaults to a plan-mode service, which estimates walk times and needs no OneMap client.
   const conflicts = conflictService ?? createConflictService({ onemapClient: null })
+  const staticMaps = staticMapService ?? createStaticMapService()
 
   // Unauthenticated by design: logging in is how you get a token.
   app.use('/api/auth', createAuthRouter({ tokenService, repositories }))
@@ -45,7 +47,7 @@ export function createApp({ tokenService, repositories, conflictService } = {}) 
     '/api/events',
     auth,
     requirePasswordChanged,
-    createEventsRouter({ repositories, conflictService: conflicts }),
+    createEventsRouter({ repositories, conflictService: conflicts, staticMapService: staticMaps }),
   )
 
   app.use((req, res) => {

@@ -107,6 +107,26 @@ describe('can — ordinary user is tightly scoped', () => {
   })
 })
 
+describe('can — layout viewing', () => {
+  // Viewing the layout map is distinct from editing it (layout.manage): a planner needs to see
+  // the zones to plan movements but must not be able to move them.
+  it('lets the planning roles view the layout', () => {
+    expect(can({ role: 'root' }, 'layout.view')).toBe(true)
+    expect(can({ role: 'admin' }, 'layout.view')).toBe(true)
+    expect(can({ role: 'layout_designer' }, 'layout.view')).toBe(true)
+    expect(can({ role: 'planner' }, 'layout.view')).toBe(true)
+  })
+
+  it('does not let an ordinary user see the layout map', () => {
+    // A user's spatial view is the live board for their own group, not the plan.
+    expect(can({ role: 'user' }, 'layout.view')).toBe(false)
+  })
+
+  it('still refuses an ordinary user the ability to edit the layout', () => {
+    expect(can({ role: 'planner' }, 'layout.manage')).toBe(false)
+  })
+})
+
 describe('can — fails closed', () => {
   it('denies every capability for an unknown role', () => {
     for (const capability of permissions.ALL_CAPABILITIES) {
