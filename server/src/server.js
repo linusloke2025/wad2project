@@ -9,7 +9,10 @@
  */
 
 import 'dotenv/config'
+import { existsSync } from 'node:fs'
 import http from 'node:http'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import mongoose from 'mongoose'
 
 import { createApp } from './app.js'
@@ -47,6 +50,11 @@ export async function startServer({ env = process.env } = {}) {
   // over HTTP reaches the event's socket room.
   const broadcaster = createBroadcaster()
 
+  // Serve the built client when one exists. Absence is not an error: in development the Vite
+  // dev server serves the client and proxies here, so this process is API-only.
+  const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/dist')
+  const staticDir = existsSync(path.join(clientDist, 'index.html')) ? clientDist : undefined
+
   const app = createApp({
     tokenService,
     repositories,
@@ -54,6 +62,7 @@ export async function startServer({ env = process.env } = {}) {
     staticMapService: createStaticMapService(),
     liveState,
     broadcaster,
+    staticDir,
   })
 
   const httpServer = http.createServer(app)
@@ -61,6 +70,11 @@ export async function startServer({ env = process.env } = {}) {
 
   return httpServer.listen(config.port, () => {
     console.log(`Listening on http://localhost:${config.port}`)
+    console.log(
+      staticDir
+        ? `Serving the built client from ${staticDir}`
+        : 'No client build found — serving the API only (use the Vite dev server for the UI)',
+    )
     console.log(
       onemapClient
         ? 'OneMap routing: enabled — Map layouts use real walking times'

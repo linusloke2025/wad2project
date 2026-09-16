@@ -26,8 +26,19 @@
 const DEFAULT_BASE_URL = 'https://www.onemap.gov.sg'
 const COORD_PRECISION = 6
 const DEFAULT_ZOOM = 17
-const DEFAULT_WIDTH = 640
-const DEFAULT_HEIGHT = 480
+
+/**
+ * OneMap rejects anything larger than 512x512, verified live: 640x480 returns HTTP 400 with
+ * {"error":"The maximum resolution size is 512 x 512."} while 512x512 returns a PNG.
+ *
+ * This matters because the original 640x480 default was rejected on EVERY request, so every Map
+ * layout quietly fell back to the placeholder and looked like an OneMap outage. Clamping means
+ * an oversized caller is corrected rather than sent a request that can only fail.
+ */
+export const MAX_DIMENSION = 512
+
+const DEFAULT_WIDTH = MAX_DIMENSION
+const DEFAULT_HEIGHT = MAX_DIMENSION
 const DEFAULT_LAYER = 'default'
 
 /** Cap on shapes per request: polygons ride in the query string, which has length limits. */
@@ -99,13 +110,18 @@ export function buildStaticMapUrl({
   const used = drawable.slice(0, MAX_POLYGONS)
   const omittedShapes = drawable.length - used.length
 
+  // Clamp rather than pass through: an oversized request is rejected by OneMap, so sending one
+  // would only produce a placeholder.
+  const safeWidth = Math.min(Math.max(1, Math.round(Number(width) || DEFAULT_WIDTH)), MAX_DIMENSION)
+  const safeHeight = Math.min(Math.max(1, Math.round(Number(height) || DEFAULT_HEIGHT)), MAX_DIMENSION)
+
   const params = [
     `layerchosen=${layer}`,
     `latitude=${latitude}`,
     `longitude=${longitude}`,
     `zoom=${zoom}`,
-    `width=${width}`,
-    `height=${height}`,
+    `width=${safeWidth}`,
+    `height=${safeHeight}`,
   ]
 
   if (used.length > 0) {

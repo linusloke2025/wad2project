@@ -7,6 +7,8 @@
  * routing, body parsing and the middleware chain are all genuinely covered.
  */
 
+import path from 'node:path'
+
 import express from 'express'
 
 import { requireAuth } from './http/middleware/requireAuth.js'
@@ -18,7 +20,15 @@ import { createStaticMapService } from './services/staticMapService.js'
 import { createBroadcaster } from './realtime/broadcaster.js'
 import { createLiveState } from './realtime/liveState.js'
 
-export function createApp({ tokenService, repositories, conflictService, staticMapService, liveState, broadcaster } = {}) {
+export function createApp({
+  tokenService,
+  repositories,
+  conflictService,
+  staticMapService,
+  liveState,
+  broadcaster,
+  staticDir,
+} = {}) {
   if (!tokenService) throw new Error('createApp requires a tokenService')
   if (!repositories) throw new Error('createApp requires repositories')
 
@@ -62,8 +72,29 @@ export function createApp({ tokenService, repositories, conflictService, staticM
     }),
   )
 
+  // Serve the built client when one is configured. This is what makes the deployment
+  // single-origin, and it lets an end-to-end run exercise the real app without starting Vite.
+  if (staticDir) {
+    app.use(express.static(staticDir))
+  }
+
   app.use((req, res) => {
-    res.status(404).json({ error: 'Not found' })
+    // SPA fallback. A client-side route such as /events/abc has no file behind it, so the shell
+    // is served and the Vue router takes over in the browser.
+    //
+    // API and socket paths are deliberately excluded: returning HTML for an unknown /api path
+    // would turn a fetch typo into a JSON parse error far from its cause.
+    const isClientRoute =
+      Boolean(staticDir) &&
+      req.method === 'GET' &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/socket.io')
+
+    if (isClientRoute) {
+      return res.sendFile(path.join(staticDir, 'index.html'))
+    }
+
+    return res.status(404).json({ error: 'Not found' })
   })
 
   // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by arity.

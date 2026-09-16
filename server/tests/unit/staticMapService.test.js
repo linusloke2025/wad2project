@@ -76,6 +76,36 @@ describe('buildStaticMapUrl — request shape', () => {
   })
 })
 
+describe('buildStaticMapUrl — OneMap resolution limit', () => {
+  // Verified against the live API: 640x480 returns HTTP 400 with
+  // {"error":"The maximum resolution size is 512 x 512."} while 512x512 returns a PNG.
+  //
+  // This was a real bug: the original 640x480 default was rejected on EVERY request, so each
+  // Map layout degraded to the placeholder and looked like OneMap being down. The failure
+  // arrives as a 400 here but as a 200 elsewhere, so only the content-type check caught it.
+
+  it('keeps the default dimensions within the maximum', () => {
+    const { url } = staticMap.buildStaticMapUrl({ zones: [], ...EVENT_COORDS })
+
+    expect(Number(/width=(\d+)/.exec(url)[1])).toBeLessThanOrEqual(staticMap.MAX_DIMENSION)
+    expect(Number(/height=(\d+)/.exec(url)[1])).toBeLessThanOrEqual(staticMap.MAX_DIMENSION)
+  })
+
+  it('clamps an oversized dimension rather than sending a request that can only fail', () => {
+    const { url } = staticMap.buildStaticMapUrl({ zones: [], ...EVENT_COORDS, width: 1200, height: 900 })
+
+    expect(Number(/width=(\d+)/.exec(url)[1])).toBe(staticMap.MAX_DIMENSION)
+    expect(Number(/height=(\d+)/.exec(url)[1])).toBe(staticMap.MAX_DIMENSION)
+  })
+
+  it('leaves a dimension under the limit untouched', () => {
+    const { url } = staticMap.buildStaticMapUrl({ zones: [], ...EVENT_COORDS, width: 400, height: 300 })
+
+    expect(Number(/width=(\d+)/.exec(url)[1])).toBe(400)
+    expect(Number(/height=(\d+)/.exec(url)[1])).toBe(300)
+  })
+})
+
 describe('buildStaticMapUrl — polygon encoding', () => {
   it('closes the ring, because OneMap requires the start and end point to match', () => {
     const { url } = staticMap.buildStaticMapUrl({ zones: [ZONE], ...EVENT_COORDS })
