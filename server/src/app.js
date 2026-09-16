@@ -13,8 +13,9 @@ import { requireAuth } from './http/middleware/requireAuth.js'
 import { requirePasswordChanged } from './http/middleware/requirePasswordChanged.js'
 import { createAuthRouter } from './http/routes/auth.js'
 import { createEventsRouter } from './http/routes/events.js'
+import { createConflictService } from './services/conflictService.js'
 
-export function createApp({ tokenService, repositories } = {}) {
+export function createApp({ tokenService, repositories, conflictService } = {}) {
   if (!tokenService) throw new Error('createApp requires a tokenService')
   if (!repositories) throw new Error('createApp requires repositories')
 
@@ -23,6 +24,9 @@ export function createApp({ tokenService, repositories } = {}) {
   app.use(express.json())
 
   const auth = requireAuth({ tokenService })
+
+  // Defaults to a plan-mode service, which estimates walk times and needs no OneMap client.
+  const conflicts = conflictService ?? createConflictService({ onemapClient: null })
 
   // Unauthenticated by design: logging in is how you get a token.
   app.use('/api/auth', createAuthRouter({ tokenService, repositories }))
@@ -37,7 +41,12 @@ export function createApp({ tokenService, repositories } = {}) {
   })
 
   // Everything below requires a session that is not stuck on a temporary password.
-  app.use('/api/events', auth, requirePasswordChanged, createEventsRouter({ repositories }))
+  app.use(
+    '/api/events',
+    auth,
+    requirePasswordChanged,
+    createEventsRouter({ repositories, conflictService: conflicts }),
+  )
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' })
