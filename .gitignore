@@ -45,6 +45,17 @@ atlas-credentials.env
 *credentials*.env
 *secrets*.env
 
+# Git credential material supplied locally for a one-off push. The standard `store` helper
+# filename plus a local variant, so a token can never be swept into a commit by `git add -A`.
+.git-credentials
+.git-credentials.local
+.git-credentials.*
+*.git-token
+
+# SSH keypair used for the deploy key. Lives in the workspace because the sandbox cannot write
+# to %USERPROFILE%\.ssh. The private half must never be committed.
+.ssh/
+
 # Editor / OS
 .DS_Store
 Thumbs.db
