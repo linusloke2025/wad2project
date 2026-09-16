@@ -11,6 +11,7 @@
 import { Router } from 'express'
 
 import { ACK_STATUSES, summarizeAcknowledgements } from '../../domain/announcements.js'
+import { buildBottleneckReport } from '../../domain/bottleneckReport.js'
 import { requireCapability } from '../middleware/requireCapability.js'
 
 const MIN_POLYGON_POINTS = 3
@@ -356,6 +357,44 @@ export function createEventsRouter({ repositories, conflictService, staticMapSer
 
       const assignments = await repositories.assignments.listByEvent(event.id)
       return res.json({ assignments })
+    } catch (error) {
+      return next(error)
+    }
+  })
+
+  router.get('/:eventId/report', requireCapability('report.view'), async (req, res, next) => {
+    try {
+      const event = await loadEvent(req, res)
+      if (!event) return undefined
+
+      const [zones, groups, assignments] = await Promise.all([
+        repositories.zones.listByEvent(event.id),
+        repositories.groups.listByEvent(event.id),
+        repositories.assignments.listByEvent(event.id),
+      ])
+
+      // Optional so a deployment or test double without status history still serves the plan
+      // half of the report rather than erroring.
+      const statusUpdates = repositories.statusUpdates
+        ? await repositories.statusUpdates.listByEvent(event.id)
+        : []
+
+      const evaluation = await conflictService.evaluate({ event, zones, groups, assignments })
+
+      // The report needs to know which zone a transition was heading to.
+      const assignmentZone = Object.fromEntries(assignments.map((entry) => [entry.id, entry.zoneId]))
+
+      const report = buildBottleneckReport({
+        zones,
+        groups,
+        assignments,
+        statusUpdates,
+        conflicts: evaluation.conflicts,
+        assignmentZone,
+        eventWindow: { start: event.start, end: event.end },
+      })
+
+      return res.json({ eventId: event.id, report })
     } catch (error) {
       return next(error)
     }

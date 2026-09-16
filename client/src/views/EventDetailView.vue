@@ -5,6 +5,7 @@ import { describeError } from '@/api/client.js'
 import { useAuthStore } from '@/stores/auth.js'
 import PlanSchedule from '@/components/PlanSchedule.vue'
 import LiveBoard from '@/components/LiveBoard.vue'
+import BottleneckReport from '@/components/BottleneckReport.vue'
 
 const props = defineProps({ eventId: { type: String, required: true } })
 
@@ -178,6 +179,11 @@ onMounted(load)
         <!-- Groups and their itinerary slots -->
         <div v-if="canViewPlans" class="col-12">
           <PlanSchedule :event-id="eventId" :zones="layout?.zones ?? []" @changed="reloadConflicts" />
+        </div>
+
+        <!-- Post-event analysis: what the plan predicted versus what actually happened. -->
+        <div v-if="canViewPlans" class="col-12">
+          <BottleneckReport :event-id="eventId" />
         </div>
 
         <!--

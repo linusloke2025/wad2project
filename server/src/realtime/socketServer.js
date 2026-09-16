@@ -108,6 +108,16 @@ export function createRealtimeServer({ httpServer, tokenService, repositories, l
         // May throw on an unknown status; the catch below turns that into a rejection ack.
         const entry = liveState.setStatus({ eventId, groupId, status })
 
+        // Persist as well as broadcast. Live state is what the board reads now and is lost on
+        // restart; this is what the post-event report reads afterwards. Awaited so a lead is not
+        // told the report was recorded when it was not.
+        await repositories.statusUpdates?.create({
+          eventId,
+          groupId,
+          status: entry.status,
+          at: entry.updatedAt,
+        })
+
         io.to(EVENT_ROOM_PREFIX + eventId).emit('status:changed', {
           groupId,
           status: entry.status,

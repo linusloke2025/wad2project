@@ -15,7 +15,7 @@
 
 import mongoose from 'mongoose'
 
-import { Announcement, AnnouncementAck, Assignment, Community, Event, Group, Membership, User, Zone } from '../models/index.js'
+import { Announcement, AnnouncementAck, Assignment, Community, Event, Group, Membership, StatusUpdate, User, Zone } from '../models/index.js'
 import { toDto, toDtoList } from './serialize.js'
 
 /** True only for values Mongoose can cast to an ObjectId. */
@@ -150,7 +150,6 @@ export function createMongooseRepositories() {
       async create({ eventId, body, createdBy = null }) {
         return toDto(await Announcement.create({ eventId, body, createdBy }))
       },
-
       async findById(id) {
         if (!isValidId(id)) return null
         return toDto(await Announcement.findById(id))
@@ -179,6 +178,18 @@ export function createMongooseRepositories() {
       async listByAnnouncement(announcementId) {
         if (!isValidId(announcementId)) return []
         return toDtoList(await AnnouncementAck.find({ announcementId }))
+      },
+    },
+
+    statusUpdates: {
+      async create({ eventId, groupId, status, at }) {
+        return toDto(await StatusUpdate.create({ eventId, groupId, status, at }))
+      },
+
+      async listByEvent(eventId) {
+        if (!isValidId(eventId)) return []
+        // Time order matters: the report derives dwell from consecutive reports.
+        return toDtoList(await StatusUpdate.find({ eventId }).sort({ at: 1 }))
       },
     },
   }
