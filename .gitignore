@@ -23,6 +23,9 @@ test-results/
 # %LOCALAPPDATA%. They are a ~115MB binary, not source.
 .playwright-browsers/
 
+# The embedded mongod used by the end-to-end suite, downloaded on first run.
+.mongodb-binaries/
+
 # School materials — not ours to publish in a public repo
 Brief.pdf
 docs/brief-decoded.txt

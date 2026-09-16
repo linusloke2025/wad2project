@@ -148,25 +148,35 @@ npm run test:unit
 - **Realtime**: real Socket.IO clients, covering the handshake, room join and per-update
   authorisation.
 
-Two groups of tests are conditional and will skip cleanly:
+Two things are worth knowing about the suite:
 
-- **OneMap live checks** (`tests/live/`) run only when `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` are
-  set, because they call the real OneMap API. Everything else uses fakes and needs no network.
+- **The OneMap live checks** (`tests/live/`) run only when `ONEMAP_EMAIL` and `ONEMAP_PASSWORD`
+  are set, because they call the real OneMap API. Everything else uses fakes and needs no network.
 
 ### End-to-end tests (Playwright)
 
 ```bash
 cd client
+npm run build                     # the server serves the built client
 npx playwright install chromium   # first time only
 npx playwright test
 ```
 
-37 tests across six journeys plus responsive checks. The suite starts the server itself, seeds a
-**separate `<database>-e2e` database**, and serves the built client — so **run `npm run build` in
-`client/` first**, or the suite will exercise a stale bundle.
+41 tests across six journeys plus responsive checks. The suite is **self-contained**: Playwright
+starts `server/src/scripts/serveForE2E.mjs`, which brings up an **embedded MongoDB**, seeds the
+fixtures, and then starts the real server through the real entry point.
 
-The seeding script refuses to run against any database whose name does not end in `-e2e`, so it
-cannot write fixtures into your application data.
+It therefore needs **no Atlas cluster, no `MONGODB_URI`, no IP allowlist and no network** — it runs
+the same way on any machine and in CI. That is deliberate: a suite that depends on a cloud database
+stops working whenever the network, the credentials or an allowlist changes, and this project lost
+three rounds of verification to exactly that. The application still uses Atlas; only the tests are
+independent, and the suite can no longer touch your data even by accident.
+
+The first run downloads an `mongod` binary (roughly 100MB) into `.mongodb-binaries/`, which is
+gitignored. It is a newer MongoDB release than a typical Atlas cluster, so the tests do not
+exercise the exact production version.
+
+`npm run build` must have been run at least once, or the suite will exercise a stale bundle.
 
 | Journey | Covers |
 |---|---|

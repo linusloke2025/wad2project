@@ -1,40 +1,28 @@
 import { defineConfig } from '@playwright/test'
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const serverDir = path.resolve(here, '../server')
 
-/**
- * Build the E2E database URI by swapping the database name on the app's URI.
- *
- * The suite therefore runs against `wad2-e2e`, never `wad2`. seedE2E also refuses to write to a
- * database whose name does not end in `-e2e`, so a mistake here fails loudly instead of
- * polluting real data.
- */
-function e2eMongoUri() {
-  const envText = readFileSync(path.join(serverDir, '.env'), 'utf8')
-  const uri = envText.match(/^MONGODB_URI=(.*)$/m)?.[1]?.trim()
-
-  if (!uri) throw new Error('server/.env has no MONGODB_URI, so the E2E database cannot be derived')
-
-  const [beforeQuery, ...queryParts] = uri.split('?')
-  const query = queryParts.length > 0 ? `?${queryParts.join('?')}` : ''
-  const database = beforeQuery.slice(beforeQuery.lastIndexOf('/') + 1)
-
-  if (database === '') throw new Error('server/.env MONGODB_URI has no database name')
-
-  return `${beforeQuery.slice(0, beforeQuery.lastIndexOf('/'))}/${database}-e2e${query}`
-}
-
-const E2E_MONGODB_URI = e2eMongoUri()
-// globalSetup runs in this process, so hand it the URI the webServer will also be given.
-process.env.E2E_MONGODB_URI = E2E_MONGODB_URI
-
 const PORT = 3100
 const BASE_URL = `http://127.0.0.1:${PORT}`
 
+/**
+ * End-to-end configuration.
+ *
+ * The suite is **self-contained**: Playwright starts `serveForE2E.mjs`, which brings up an
+ * embedded MongoDB, seeds the fixtures, and then starts the real server through the real entry
+ * point — which also serves the built client, so the tests exercise the production shape.
+ *
+ * That means running the tests needs no Atlas cluster, no `MONGODB_URI`, no IP allowlist and no
+ * network. It is deliberate: a suite that depends on a cloud database stops working whenever the
+ * network, the credentials or an allowlist changes, and this project lost three rounds of
+ * verification to exactly that. The application still uses Atlas; only the tests are independent.
+ *
+ * `npm run build` in `client/` must have been run at least once, because the server serves the
+ * built client rather than starting Vite.
+ */
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -44,7 +32,6 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],
-  globalSetup: './e2e/global-setup.js',
 
   use: {
     baseURL: BASE_URL,
@@ -52,19 +39,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  // The built client is served by Express, so the suite exercises the real production shape and
-  // never needs the Vite dev server.
   webServer: {
-    command: 'npm start',
+    command: 'node src/scripts/serveForE2E.mjs',
     cwd: serverDir,
     url: BASE_URL,
     reuseExistingServer: false,
-    timeout: 120_000,
-    env: {
-      ...process.env,
-      MONGODB_URI: E2E_MONGODB_URI,
-      PORT: String(PORT),
-    },
+    // Generous, because the very first run downloads an mongod binary.
+    timeout: 300_000,
+    env: { ...process.env, PORT: String(PORT) },
   },
 
   projects: [
